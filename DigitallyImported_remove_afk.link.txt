@@ -1,0 +1,1 @@
+https://github.com/lethak/digitally_imported_userscript/raw/master/DIU.user.js
