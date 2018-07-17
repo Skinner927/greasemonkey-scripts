@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         JSBin beautify buttons
-// @namespace    http://dennisskinner.com
+// @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @version      0.1
 // @description  Adds beautifier buttons to JSBin since key code locks computer
-// @author       dskinner
+// @author       skinner927
 // @match        http://jsbin.com/*/edit?*
 // @grant        none
 // ==/UserScript==

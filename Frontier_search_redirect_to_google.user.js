@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Frontier search redirect
-// @namespace    frontierredirect.dennisskinner.com
+// @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @version      0.1
 // @description  Redirect Frontier ISP searches to google
 // @author       skinner927
@@ -19,7 +19,7 @@ if(!q){
 
 /**
 Usually we end on frontier because it thought we tried to hit a domain
-So strip that domain bit out because we didn't actually enter the 
+So strip that domain bit out because we didn't actually enter the
 http: and trailing slash part.
 */
 if(q.indexOf('http') === 0){

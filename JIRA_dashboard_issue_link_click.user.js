@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         JIRA Dashboard Issue Click
-// @namespace    http://dennisskinner.com
+// @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @version      0.1
 // @description  When clicking an issue number on the jira dashboard, just open the damn thing.
-// @author       dskinner
+// @author       skinner927
 // @match        https://*.atlassian.net/secure/RapidBoard.jspa*
 // @grant        none
 // ==/UserScript==

@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Toggl Kill Banner
-// @namespace    http://toggl.gm.dennisbskinner.com
+// @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @version      0.2
 // @description  Kills annoying banners in Toggl
-// @author       Dennis Skinner
+// @author       skinner927
 // @match        https://www.toggl.com/*
 // @match        http://www.toggl.com/*
 // @grant        none
