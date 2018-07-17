@@ -78,8 +78,12 @@
       height: '75px',
     }));
 
-    // Generic catch-alls
-    waitForKeyElements('div.cover', addCoverContainer('>a'));
+    // Covers on the list pages
+    waitForKeyElements('div.mix_square div.cover', addCoverContainer('>a', 'div.mix_square'));
+    // "Similar Playlists"
+    waitForKeyElements('div.card.sidebar_mix div.cover', addCoverContainer('>a'));
+
+    // Grouped covers
     waitForKeyElements('div.covers', addCoverContainer('>a'));
   })();
 
