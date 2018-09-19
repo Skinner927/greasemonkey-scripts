@@ -10,6 +10,11 @@
 // @grant        GM_setValue
 // ==/UserScript==
 
+/* Changelog *
+ * 1.1 - Fix button text wrapping on Windows
+ * 1.0 - Initial release
+ */
+
 (function () {
   'use strict';
 
