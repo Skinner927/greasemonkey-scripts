@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/8Tracks_Hide_Album_Covers.user.js
 // @author       skinner927
-// @version      1.0
+// @version      1.1
 // @match        https://8tracks.com/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
@@ -271,6 +271,7 @@
         top: 40px;
         left: -15px;
         transform: translateX(-50%);
+        min-width: 220px;
         background: #eee;
         border: 2px solid #0394da;
         border-radius: 10px;
@@ -289,6 +290,14 @@
       .ds-art-cover-menu-button {
         width: 100%;
         display: block;
+        white-space: nowrap;
+      }
+
+      .ds-art-cover-slider-container {
+        display: flex;
+      }
+      .ds-art-cover-slider {
+        flex-grow: 1;
       }
     `);
 
@@ -351,7 +360,7 @@
     });
     slider.on('change', () => applySliderUpdate.flush());
     // Build slider container
-    var sliderContainer = $('<div style="display: flex;" />');
+    var sliderContainer = $('<div class="ds-art-cover-slider-container" />');
     sliderContainer.append(slider);
     sliderContainer.append(sliderValue);
     menuDrop.append(sliderContainer);
