@@ -1,0 +1,8 @@
+// ==UserScript==
+// @name         Dev Loader
+// @namespace    https://github.com/Skinner927/greasemonkey-scripts
+// @version      1.0
+// @match        https://foobar.com
+// @require      file:///Users/me/git/greasemonkey-scripts/whatever.user.js
+// ==/UserScript==
+// The important part here is the @require file bit
