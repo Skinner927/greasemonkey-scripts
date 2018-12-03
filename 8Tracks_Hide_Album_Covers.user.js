@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/8Tracks_Hide_Album_Covers.user.js
 // @author       skinner927
-// @version      1.1
+// @version      1.2
 // @match        https://8tracks.com/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
@@ -11,11 +11,12 @@
 // ==/UserScript==
 
 /* Changelog *
+ * 1.2 - Fix cover offset of sidebar mixes. Add album cover text drop shadow.
  * 1.1 - Fix button text wrapping on Windows
  * 1.0 - Initial release
  */
 
-(function () {
+(function() {
   'use strict';
 
   var COVER_CSS_CLASS = 'ds-art-cover';
@@ -55,6 +56,16 @@
   var artCoverShowStyleElement = GM_addStyle('');
   var artCoverOpacityStyleElement = GM_addStyle('');
 
+  // Adds a black drop shadow to the white text on mix images.
+  // Unfortunately this is always going to be shown, but really helps
+  // readability when the covers are hidden, but also helps when the
+  // original mix cover is light.
+  GM_addStyle(`
+    .mix_square .title, .mix_square .byline {
+      text-shadow: 0 0 5px black;
+    }
+  `);
+
   // INIT
   (function init() {
     addConfigMenu();
@@ -86,7 +97,9 @@
     // Covers on the list pages
     waitForKeyElements('div.mix_square div.cover', addCoverContainer('>a', 'div.mix_square'));
     // "Similar Playlists"
-    waitForKeyElements('div.card.sidebar_mix div.cover', addCoverContainer('>a'));
+    waitForKeyElements('div.card.sidebar_mix div.cover', addCoverContainer('>a', null, {
+      'margin-left': '3px',
+    }));
 
     // Grouped covers
     waitForKeyElements('div.covers', addCoverContainer('>a'));
@@ -204,12 +217,12 @@
 
       // We set display on our element explicitly when we're hovering it,
       // but global CSS takes care of it otherwise.
-      hoverElement.hover(function () {
+      hoverElement.hover(function() {
         // Hover in
         if (HIDE_COVERS && SHOW_COVERS_HOVER) {
           cover.css('display', 'none');
         }
-      }, function () {
+      }, function() {
         // Hover out
         cover.css('display', '');
       });
@@ -315,7 +328,7 @@
     </a>`.trim()).appendTo(menu);
     var menuDrop = $('<div class="ds-art-cover-menu-drop" />')
       .appendTo(menu);
-    menuButton.click(function () {
+    menuButton.click(function() {
       var flipped = menuDrop.css('display') === 'none' ? 'block' : 'none';
       menuDrop.css('display', flipped);
     });
@@ -325,7 +338,7 @@
     // Gets updated every time we toggle
     var toggleBtn = $('<button class="ds-art-cover-menu-button" ' +
       'id="ds-art-cover-toggle-button">Toggle Cover</button>');
-    toggleBtn.click(function () {
+    toggleBtn.click(function() {
       if (!HIDE_COVERS) {
         hideArtCovers();
       } else {
@@ -351,14 +364,14 @@
     var slider = $('<input type="range" min="1" max="100" class="ds-art-cover-slider" />');
     // Updates
     // This will update the UI
-    var updateSliderVal = function (val) {
+    var updateSliderVal = function(val) {
       sliderValue.html(val + '%');
     };
     // This will update the CSS with a debounce so we don't go nuts
-    var applySliderUpdate = debounce(function (val) {
+    var applySliderUpdate = debounce(function(val) {
       updateArtCoverOpacity(val);
     }, 20);
-    slider.on('input', function () {
+    slider.on('input', function() {
       var val = parseInt(slider.val(), 10);
       updateSliderVal(val);
       applySliderUpdate(val);
@@ -431,7 +444,7 @@
       /*--- Found target node(s).  Go through each and act if they
       are new.
   */
-      targetNodes.each(function () {
+      targetNodes.each(function() {
         var jThis = $(this);
         var alreadyFound = jThis.data('alreadyFound') || false;
 
@@ -463,7 +476,7 @@
     else {
       //--- Set a timer, if needed.
       if (!timeControl) {
-        timeControl = setInterval(function () {
+        timeControl = setInterval(function() {
           waitForKeyElements(selectorTxt,
             actionFunction,
             bWaitOnce,
@@ -498,7 +511,7 @@
       }
     };
 
-    var debounced = function () {
+    var debounced = function() {
       context = this;
       args = arguments;
       timestamp = Date.now();
@@ -512,14 +525,14 @@
       return result;
     };
 
-    debounced.clear = function () {
+    debounced.clear = function() {
       if (timeout) {
         clearTimeout(timeout);
         timeout = null;
       }
     };
 
-    debounced.flush = function () {
+    debounced.flush = function() {
       if (timeout) {
         result = func.apply(context, args);
         context = args = null;
