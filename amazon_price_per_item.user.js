@@ -3,12 +3,17 @@
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @author       skinner927
-// @version      1.0
+// @version      1.1
 // @match        *://*.amazon.com/s/*
 // @match        *://*.amazon.com/*/dp/*
 // @run-at       document-start
 // @require      https://code.jquery.com/jquery-3.3.1.slim.min.js
 // ==/UserScript==
+
+/* Changelog *
+ * 1.1 - Add support for suggested items in item details
+ * 1.0 - Initial release
+ */
 
 (function() {
   'use strict';
@@ -24,9 +29,15 @@
     title = (title || '').trim().toLowerCase();
 
     var match = title.match(/pack of (\d)+/) // pack of 3
-      || title.match(/(\d+)( |-)pack/)       // 2 pack or 2-pack
-      || title.match(/(\d+),? count/)        // 4 count or 4, count
+      || title.match(/(\d+)( |-)pack/)  // 2 pack or 2-pack
+      || title.match(/(\d+),? count/)   // 4 count or 4, count
+      || title.match(/box of (\d+)/)    // box of 12
       || null;
+
+    // "Twin pack"
+    if (!match && title.indexOf('twin pack') !== -1) {
+      return 2;
+    }
 
     if (match) {
       var strCount = match[1].trim();
@@ -119,12 +130,51 @@
     `).appendTo($price.closest('tr').parent());
   }
 
+  function newSuggestedItem($item) {
+    var title = $item.find('.p13n-sc-truncate').text().trim();
+    if (!title) {
+      title = $item.find('.p13n-sc-truncated').text().trim();
+    }
+    var countInPack = getCountFromTitle(title);
+
+    if (!countInPack) {
+      log('No count', $item);
+      return;
+    }
+
+    var $price = $item.find('.p13n-sc-price');
+    var priceParts = $price.text().trim()
+      .replace('$', '').split('.');
+    var whole = parseInt(priceParts[0], 10);
+    var cents = parseInt(priceParts[1], 10);
+
+    if (isNaN(whole) || isNaN(cents)) {
+      log('Bad price', $title);
+      return;
+    }
+
+    // Price in pennies
+    var price = cents + (whole * 100);
+    var perItem = '$' + toFixedCeil(price / countInPack / 100, 2);
+    var priceInDollars = '$' + whole + '.' + cents;
+
+    $(`
+    <div class="a-row a-size-small">
+      Estimated ${perItem} per item
+      <div class="a-color-secondary">(${countInPack} @ ${priceInDollars})</div>
+    </div>
+    `).appendTo($price.closest('.p13n-asin'));
+  }
+
   // Called once jQuery is loaded and page is ready
   function main() {
     // Product search pages
     waitForKeyElements('.s-result-item', newSearchPageItem, false);
     // Individual product page
     waitForKeyElements('#productTitle', newItemDetails, false);
+    // Suggested items on the individual product pages
+    waitForKeyElements('.a-carousel-card[role="listitem"]', newSuggestedItem,
+      false);
   }
 
   // Wait for jQuery to be loaded
