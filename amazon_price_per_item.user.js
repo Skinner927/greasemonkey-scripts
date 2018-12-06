@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @author       skinner927
-// @version      1.1
+// @version      1.2
 // @match        *://*.amazon.com/s/*
 // @match        *://*.amazon.com/*/dp/*
 // @run-at       document-start
@@ -11,8 +11,9 @@
 // ==/UserScript==
 
 /* Changelog *
- * 1.1 - Add support for suggested items in item details
- * 1.0 - Initial release
+ * 1.2 - Fix for prices that show a range (eg. $22.95 - $40.22).
+ * 1.1 - Add support for suggested items in item details.
+ * 1.0 - Initial release.
  */
 
 (function() {
@@ -25,6 +26,35 @@
     }
   }
 
+  var selectors = [
+    ['pack of ', ''],   // pack of 3
+    ['', '( |-)pack'],  // 2 pack or 2-pack
+    ['', ',? count'],   // 4 count or 4, count
+    ['box of ', ''],    // box of 12
+  ];
+
+  // Some common slang for numbers
+  var numberSlang = {
+    2: ['twin', 'double'],
+    3: ['triple'],
+    4: ['quad']
+  }
+
+  // Let's build all word numbers
+  // https://stackoverflow.com/a/493788/721519
+  var units = [
+    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+    'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
+    'sixteen', 'seventeen', 'eighteen', 'nineteen',
+  ];
+  var tens = [
+    '', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty',
+    'seventy', 'eighty', 'ninety',
+  ];
+  var scales = ['hundred', 'thousand', 'million', 'billion', 'trillion'];
+
+  // OK I'll tackle the above later
+
   function getCountFromTitle(title) {
     title = (title || '').trim().toLowerCase();
 
@@ -34,9 +64,14 @@
       || title.match(/box of (\d+)/)    // box of 12
       || null;
 
-    // "Twin pack"
-    if (!match && title.indexOf('twin pack') !== -1) {
-      return 2;
+    if (!match) {
+      // "Twin pack"
+      if (title.match(/(twin|double|two) pack/)) {
+        return 2;
+      }
+      if (title.match(/(triple|three) pack/)) {
+        return 3;
+      }
     }
 
     if (match) {
@@ -68,10 +103,10 @@
     }
 
     var whole = parseInt(
-      $priceBlock.find('.sx-price-whole').text().trim(),
+      $priceBlock.find('.sx-price-whole').first().text().trim(),
       10);
     var cents = parseInt(
-      $priceBlock.find('.sx-price-fractional').text().trim(),
+      $priceBlock.find('.sx-price-fractional').first().text().trim(),
       10);
 
     if (isNaN(whole) || isNaN(cents)) {
