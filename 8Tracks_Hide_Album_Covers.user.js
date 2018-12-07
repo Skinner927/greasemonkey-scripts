@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/8Tracks_Hide_Album_Covers.user.js
 // @author       skinner927
-// @version      1.2
+// @version      1.3
 // @match        https://8tracks.com/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
@@ -11,9 +11,10 @@
 // ==/UserScript==
 
 /* Changelog *
+ * 1.3 - Hide album art of current playing track on bottom bar.
  * 1.2 - Fix cover offset of sidebar mixes. Add album cover text drop shadow.
- * 1.1 - Fix button text wrapping on Windows
- * 1.0 - Initial release
+ * 1.1 - Fix button text wrapping on Windows.
+ * 1.0 - Initial release.
  */
 
 (function() {
@@ -103,6 +104,10 @@
 
     // Grouped covers
     waitForKeyElements('div.covers', addCoverContainer('>a'));
+
+    // Current playing track in bottom bar
+    GM_addStyle('#player_mix { position: relative; }');
+    waitForKeyElements('#player_mix', addCoverContainer());
   })();
 
   function strToBool(value) {
