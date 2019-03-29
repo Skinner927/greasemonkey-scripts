@@ -2,25 +2,59 @@
 // @name         GMail right-click menu reorder
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/gmail_menu_reorder.user.js
-// @version      1.0
+// @version      1.1
 // @description  Reorders inbox right-click menu so more useful options are at the top (I do belive this was the old order).
 // @author       skinner927
 // @match        https://mail.google.com/mail/*
 // @grant        none
 // ==/UserScript==
 
-(function () {
+/**
+ * Changelog
+ * - 1.1:  Will order to top or bottom of menu depending on what's closer to
+ *     the mouse.
+ */
+
+(function() {
   'use strict';
+
+  // Track mouse
+  var mouseY = 0;
+  document.addEventListener('mousemove', function(event) {
+    mouseY = event.clientY;
+  }, { passive: true });
 
   // Expected menu order
   var ORDER = [
     'Archive',
     'Delete',
     'Mark as read',
+    'Mark as unread',
   ];
 
-  var control = waitForKeyElements('body > [role="menu"]', function (menu) {
-    var found = ORDER.map(function () { });
+  function makeSeparator(separator) {
+    // Create separator
+    var sep;
+    if (separator) {
+      sep = separator.cloneNode();
+      sep.style.display = null;
+    } else {
+      console.error('DS: Could not find separator when iterating over menu');
+      sep = document.createElement('div');
+      sep.style.margin = '6px 0px';
+      sep.style.borderTop = '1px solid rgb(235, 235, 235)';
+    }
+    sep.id = ':q' + Math.random().toString(16).substr(3, 4);
+    return sep;
+  }
+
+  function doReorder(menu) {
+    var rect = menu.getBoundingClientRect();
+    // Do we place the items we want on top or on bottom?
+    var placeOnTop = (rect.height / 2) > mouseY - rect.top;
+
+    // Find the items we're to move
+    var found = ORDER.map(function() { });
 
     // Search for the menu items we want to move
     var separator = null;
@@ -37,39 +71,61 @@
     }
 
     // Shove them in!
-    found = found.filter(function (x) {
+    found = found.filter(function(x) {
       return !!x;
     });
-    if (found.length) {
+    if (found.length && !menu.dataset.addedSep) {
       // Create separator
-      var sep;
-      if (separator) {
-        sep = separator.cloneNode();
-        sep.style.display = null;
-      } else {
-        console.error('DS: Could not find separator when iterating over menu');
-        sep = document.createElement('div');
-        sep.style.margin = '6px 0px';
-        sep.style.borderTop = '1px solid rgb(235, 235, 235)';
-      }
-      sep.id = ':q' + Math.random().toString(16).substr(3, 4);
-      // menu.style.top = (
-      //   parseInt(menu.style.top.replace('px', ''), 10) + sep.getBoundingClientRect().height) 
-      //   + 'px';
-      found.push(sep);
-    } else {
+      var topSep = makeSeparator(separator);
+      menu.insertBefore(topSep, menu.children[0]);
+      var bottomSep = makeSeparator(separator);
+      menu.insertBefore(bottomSep, null);
+      menu.dataset.addedSep = true;
+      menu.dataset.topSep = topSep.id;
+      menu.dataset.bottomSep = bottomSep.id;
+    } else if (!found.length) {
+      console.error('Could not find any elements in the menu to reorder!');
       return;
     }
     // Iterate in reverse because we push to the top
     found.reverse();
-    found.forEach(function (child, i) {
-      menu.insertBefore(child, menu.children[0]);
+    found.forEach(function(child) {
+      menu.insertBefore(child, placeOnTop ? menu.children[0] : null);
     });
+    var sepToHide = document.getElementById(placeOnTop ?
+      menu.dataset.bottomSep : menu.dataset.topSep);
+    var sepToShow = document.getElementById(!placeOnTop ?
+      menu.dataset.bottomSep : menu.dataset.topSep);
+    sepToHide.style.display = 'none';
+    sepToShow.style.display = '';
+  }
+
+  var observers = [];
+  var control = waitForKeyElements('body > [role="menu"]', function(menu) {
+    // Observe when the menu is shown again so we can properly reorder
+    var observer = new MutationObserver(function(mutationList) {
+      mutationList.forEach(function(mutation) {
+        if (mutation.type === 'attributes' &&
+          mutation.target === menu &&
+          mutation.attributeName === 'tabindex' &&
+          +menu.tabIndex === 0) {
+          doReorder(menu);
+        }
+      });
+    });
+    observer.observe(menu, {
+      attributes: true,
+    });
+    observers.push(observer);
+
+    // Do the initial reorder
+    doReorder(menu);
   });
 
   // Bind a function to the window to kill this script
-  window.killGmailMenuReorder = function () {
+  window.killGmailMenuReorder = function() {
     clearInterval(control);
+    observers.forEach(function(o) { o.disconnect(); });
   };
 
 
@@ -110,7 +166,7 @@
       /*--- Found target node(s).  Go through each and act if they
           are new.
       */
-      targetNodes.forEach(function (element) {
+      targetNodes.forEach(function(element) {
         var alreadyFound = element.dataset.found == 'alreadyFound' ? 'alreadyFound' : false;
 
         if (!alreadyFound) {
@@ -142,7 +198,7 @@
     else {
       //--- Set a timer, if needed.
       if (!timeControl) {
-        timeControl = setInterval(function () {
+        timeControl = setInterval(function() {
           waitForKeyElements(selectorTxt,
             actionFunction,
             bWaitOnce
