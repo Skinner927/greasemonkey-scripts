@@ -3,27 +3,62 @@
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @author       skinner927
-// @version      1.3
+// @version      1.4
 // @match        *://*.amazon.com/s/*
+// @match        *://*.amazon.com/s?*
 // @match        *://*.amazon.com/*/dp/*
 // @run-at       document-start
+// @grant        unsafeWindow
+// @grant        GM_xmlhttpRequest
+// @connect      code.jquery.com
 // @require      https://code.jquery.com/jquery-3.3.1.slim.min.js
 // ==/UserScript==
 
 /* Changelog *
+ * 1.4 - Improve testing & debugging. Fixed newSuggestedItem.
  * 1.3 - Add sweet title parser buildTitleParser() for parsing human words.
  * 1.2 - Fix for prices that show a range (eg. $22.95 - $40.22).
  * 1.1 - Add support for suggested items in item details.
  * 1.0 - Initial release.
  */
 
-(function() {
+// Hand rolled to work with node require and run in the browser
+(function(factory) {
+  if (typeof exports === 'object' && typeof module !== 'undefined') {
+    // Just return exports
+    module.exports = factory(true);
+  } else {
+    // Run it
+    factory();
+  }
+})(function factory(returnExports) {
   'use strict';
+  if (returnExports) {
+    return {
+      buildTitleParser: buildTitleParser,
+    };
+  }
+  // If we're not returning exports, run the gm script
+  var ID = 'gm_amazon_price_per_item';
   var DEBUG = false;
+  // We blast this simply so we can get a context if we need to debug
+  console.log(ID, 'Starting');
+
+  // TODO: Drop this if everything is working
+  // var realUnsafeWindow = (function getUnsafeWindow() {
+  //   if (typeof unsafeWindow !== 'undefined' && unsafeWindow === window) {
+  //     var node = document.createElement('div');
+  //     node.setAttribute('onclick', 'return window;');
+  //     return node.onclick();
+  //   }
+  //   return typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+  // })();
 
   function log() {
     if (DEBUG) {
-      console.info.apply(console, arguments);
+      var args = Array.prototype.slice.call(arguments);
+      args.unshift(ID);
+      console.info.apply(console, args);
     }
   }
 
@@ -31,28 +66,43 @@
 
   // Gets called for each search page product item
   function newSearchPageItem($item) {
-    var title = $item.find('.s-access-title').text();
+    log('newSearchPageItem', $item);
 
-    // Find the number in the pack (if it's a pack at all)
-    var countInPack = getCountFromTitle(title);
+    // There's no longer an easy way to snag the title so we have to
+    // figure the "title" is any element that's not the price.
+    // Additionally, it seems css class prefixes change by the day so we have
+    // to use goofy selectors.
+    var $price = null;
+    var text = [];
+    $item.find('a[class*="text-normal"]').each(function() {
+      var $a = $(this);
+      var price = $a.find('[class*="price"]').first();
+      if (price.length) {
+        $price = price;
+      } else {
+        var trimmed = $a.text().trim();
+        if (trimmed) {
+          text.push(trimmed);
+        }
+      }
+    });
+    text = text.join('\n');
+    var countInPack = getCountFromTitle(text);
 
     if (!countInPack) {
-      log('No count', $item);
+      log('Cannot find count', text, $item);
+      return;
+    } else if (!$price) {
+      log('Cannot find price', text, $item);
       return;
     }
 
-    var $priceBlock = $item.find('.sx-price');
-    if ($priceBlock.length < 1) {
-      log('Cannot find price', $item);
-      return;
+    function getNumberFrom($el) {
+      return parseInt($el.text().replace(/[^0-9]/g, ''), 10);
     }
 
-    var whole = parseInt(
-      $priceBlock.find('.sx-price-whole').first().text().trim(),
-      10);
-    var cents = parseInt(
-      $priceBlock.find('.sx-price-fractional').first().text().trim(),
-      10);
+    var whole = getNumberFrom($price.find('[class*="price-whole"]').first());
+    var cents = getNumberFrom($price.find('[class*="price-fraction"]').first());
 
     if (isNaN(whole) || isNaN(cents)) {
       log('Bad price', $item);
@@ -65,7 +115,7 @@
     var priceInDollars = '$' + whole + '.' + cents;
 
     // Stick the per/item price in a row below the price.
-    var $row = $priceBlock.closest('.a-row');
+    var $row = $price.closest('.a-row');
     $(`
     <div class="a-row a-spacing-none">
       <div class="a-size-small a-text-normal">
@@ -73,11 +123,14 @@
         (${countInPack} @ ${priceInDollars})
       </div>
     </div>
-    `).appendTo($row);
+    `).addClass(ID).appendTo($row);
+
+    log('Success', $item);
   }
 
   // Get's called on each product details page
   function newItemDetails($title) {
+    log('newItemDetails', $title);
     var countInPack = getCountFromTitle($title.text());
 
     if (!countInPack) {
@@ -107,10 +160,11 @@
       Estimated ${perItem} per item
       <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
     </td></tr>
-    `).appendTo($price.closest('tr').parent());
+    `).addClass(ID).appendTo($price.closest('tr').parent());
   }
 
   function newSuggestedItem($item) {
+    log('newSuggestedItem', $item);
     var title = $item.find('.p13n-sc-truncate').text().trim();
     if (!title) {
       title = $item.find('.p13n-sc-truncated').text().trim();
@@ -143,11 +197,39 @@
       Estimated ${perItem} per item
       <div class="a-color-secondary">(${countInPack} @ ${priceInDollars})</div>
     </div>
-    `).appendTo($price.closest('.p13n-asin'));
+    `).addClass(ID).appendTo($price.closest('.p13n-asin'));
   }
 
   // Called once jQuery is loaded and page is ready
   function main() {
+    log('Starting Main');
+
+    // This is the only way to get jQuery on the damn page.
+    // We can't share a reference to it either.
+    // This is something seemingly unique to FF, but should be fine in both.
+    if (DEBUG && !unsafeWindow.$ && !unsafeWindow.jQuery && !unsafeWindow.$j) {
+      GM_xmlhttpRequest({
+        method: 'GET',
+        url: 'https://code.jquery.com/jquery-3.3.1.slim.min.js',
+        onload: function(response) {
+          var src = 'var JQ_DO_NO_CONFLICT = typeof $ !== "undefined";\n\n'
+          src += response.responseText;
+          src += '\n\n' + `
+          if (JQ_DO_NO_CONFLICT) {
+            window.$j = $.noConflict(true);
+            console.log("%cInjected jQuery as $j", "color:blue");
+          } else {
+            console.log("%cInjected jQuery as $", "color:blue");
+          }
+          `;
+
+          var script = document.createElement('script');
+          script.textContent = src;
+          document.body.append(script);
+        },
+      });
+    }
+
     // Product search pages
     waitForKeyElements('.s-result-item', newSearchPageItem, false);
     // Individual product page
@@ -161,7 +243,7 @@
   if (window.$) {
     $(main);
   } else {
-    var waitForJQ;
+    var waitForJQ = null;
     var count = 0;
     var clearWaitForJQ = function() {
       if (waitForJQ) {
@@ -177,7 +259,7 @@
       } else if (count > 300) {
         // About 30 seconds
         clearWaitForJQ();
-        console.error('After 30 seconds could not load jQuery');
+        console.error(ID, 'After 30 seconds could not load jQuery');
       }
     }, 100);
   }
@@ -203,10 +285,9 @@
     Ensure any groups () are non-capturing (?:...)
     */
     var qualifiers = [
-      ['pack of ', ''],   // pack of 3
-      ['', '[ -]?pack'],  // 2 pack or 2-pack
-      ['', ',? count'],   // 4 count or 4, count
-      ['box of ', ''],    // box of 12
+      ['', '[ -]*pack'],  // 2 pack or 2-pack or 2 -pack or 2pack
+      ['', '[ ,]*count'], // 4 count or 4, count or 4Count
+      ['\\w of ', ''],    // foobar of X: pack of 3, box of 12
     ];
 
     var regExes = qualifiers.map(function(qual) {
@@ -295,7 +376,7 @@
         var values = numberWords[word];
         var scale = values[0];
         var increment = values[1];
-        var current = current * scale + increment;
+        current = current * scale + increment;
         if (scale > 100) {
           result += current;
           current = 0;
@@ -416,5 +497,4 @@
     }
     waitForKeyElements.controlObj = controlObj;
   }
-
-})();
+});

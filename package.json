@@ -1,0 +1,22 @@
+{
+  "name": "greasemonkey-scripts",
+  "version": "1.0.0",
+  "description": "This is my collection of GM scripts.",
+  "main": "none.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Skinner927/greasemonkey-scripts.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Skinner927/greasemonkey-scripts/issues"
+  },
+  "homepage": "https://github.com/Skinner927/greasemonkey-scripts#readme",
+  "dependencies": {
+    "chalk": "^2.4.2"
+  }
+}

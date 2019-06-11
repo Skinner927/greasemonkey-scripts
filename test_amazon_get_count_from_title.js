@@ -1,168 +1,104 @@
-// Ya gotta copy-pasta buildTitleParse between amazon_price_per_item and here
-// You also need to run in node 10+.
-var expose = {};
-var getCountFromTitle = buildTitleParser(expose);
-
+// You need to run in node 10+.
 var tests = [
-  'PACK OF TWENTY',
-  'box of 2',
-  'box of six',
-  'pack of 3',
-  '2 pack',
-  'triple pack',
-  '2-pack',
-  'twin-pack',
-  '4 count',
-  '4, count',
-  'box of 12',
-  'thirty-two count',
-  'seventy seven pack',
+  ['PACK OF TWENTY', 20],
+  ['pack of sandwiches', null],
+  ['box of 2', 2],
+  ['box of six', 6],
+  ['box of bread', null],
+  ['pack of 3', 3],
+  ['2 pack', 2],
+  ['triple pack', 3],
+  ['triple score', null],
+  ['2-pack', 2],
+  ['twin-pack', 2],
+  ['twin-screw', null],
+  ['4 count', 4],
+  ['4, count', 4],
+  ['4Count', 4],
+  ['box of 12', 12],
+  ['thirty-two count', 32],
+  ['seventy seven pack', 77],
+  ['45-pack', 45],
+  ['125 -pack', 125],
+  ['1pack', 1],
+  ['package of 22', 22],
+  ['strip of 82', 82],
 ];
 
-console.table(tests.reduce(function(all, test) {
-  all.push.apply(all, expose.regExes.map(function(reg) {
+var gmScript = require('./amazon_price_per_item.user.js');
+var chalk = null;
+try {
+  chalk = require('chalk');
+} catch (e) {
+  // pass
+}
+var expose = {};
+var getCountFromTitle = gmScript.buildTitleParser(expose);
+
+// Colors
+function red() {
+  if (chalk) {
+    return chalk.red.apply(chalk, arguments);
+  }
+  return Array.prototype.slice.call(arguments).join(' ');
+}
+function green() {
+  if (chalk) {
+    return chalk.green.apply(chalk, arguments);
+  }
+  return Array.prototype.slice.call(arguments).join(' ');
+}
+
+// Run each test
+var failures = [];
+tests.forEach(function(test) {
+  // Test every regex against this test so we can see what matches
+  var allMatchesForTest = expose.regExes.map(function(reg) {
     reg.lastIndex = 0;
     return {
-      test: test,
-      result: expose.handleMatch(test.match(reg)),
+      test: test[0],
+      result: expose.handleMatch(test[0].toLowerCase().match(reg)),
+      expected: test[1],
       reg: String(reg),
     };
-  }));
-  return all;
-}, []));
+  });
+  var onePassed = allMatchesForTest.some(r => r.result === r.expected);
 
-function buildTitleParser(expose) {
-  expose = expose || {};
-  /*
-  Qualifiers -
-  These are the overall matches that we use to identify packs.
-  The first index is the "prefix"
-  and the second index is the "suffix"
-  wherein the number (be it a digit or words) lies between.
-  Both values will be added to a regex so make it work correctly.
-  Ensure any groups () are non-capturing (?:...)
-  */
-  var qualifiers = [
-    ['pack of ', ''],   // pack of 3
-    ['', '[ -]?pack'],  // 2 pack or 2-pack
-    ['', ',? count'],   // 4 count or 4, count
-    ['box of ', ''],    // box of 12
-  ];
-
-  var regExes = qualifiers.map(function(qual) {
-    var words = '(?:[a-zA-Z\\-]+(?: |-)?){1,4}'; // We allow up to 4 words
-    return new RegExp(qual[0] + '(?:(\\d+)|(' + words + '))' + qual[1]);
+  // This is how our GM script is going to use it, so let's test that
+  var usageTest = getCountFromTitle(test[0]);
+  var usagePassed = usageTest === test[1];
+  var allPassed = onePassed && usagePassed;
+  allMatchesForTest.unshift({
+    test: 'getCountFromTitle',
+    result: usageTest,
+    expected: test[1],
   });
 
-  // Let's build all word numbers
-  // https://stackoverflow.com/a/493788/721519
+  var title = '"' + test[0] + '": ' + (allPassed ? '✔' : 'FAILED');
+  title = allPassed ? green(title) : red(title);
 
-  // Some common slang for numbers
-  var numberSlang = {
-    2: ['twin', 'double'],
-    3: ['triple'],
-    4: ['quad']
+  if (!usagePassed) {
+    title += red(' | Usage did not pass');
+  }
+  if (!onePassed) {
+    title += red(' | None of the individual regex passed');
   }
 
-  var units = [
-    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
-    'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
-    'sixteen', 'seventeen', 'eighteen', 'nineteen',
-  ];
-  var tens = [
-    '', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty',
-    'seventy', 'eighty', 'ninety',
-  ];
-  var scales = ['hundred', 'thousand', 'million', 'billion', 'trillion'];
-
-  /* numberWords */
-  // Build numberWords which will be a map for all words to a tuple that will
-  // descibe the value of the word.
-  var numberWords = {
-    and: [1, 0],
-  };
-  units.forEach(function(word, i) {
-    numberWords[word] = [1, i];
-  });
-  tens.forEach(function(word, i) {
-    if (word) {
-      numberWords[word] = [1, i * 10];
-    }
-  });
-  scales.forEach(function(word, i) {
-    numberWords[word] = [Math.pow(10, (i * 3) || 2), 0];
-  });
-  Object.keys(numberSlang).forEach(function(num) {
-    numberSlang[num].forEach(function(word) {
-      numberWords[word] = [1, parseInt(num, 10)];
-    });
-  });
-
-  function handleMatch(match) {
-    if (!match) {
-      return null;
-    }
-    var digits = match[1];
-    var text = match[2];
-
-    // Digits trump text numbers
-    if (digits) {
-      var d = parseInt(digits, 10);
-      if (d && !isNaN(d)) {
-        return d;
-      }
-    }
-    if (!text) {
-      return null;
-    }
-
-    // Ok, figure out what it's saying :D
-    var current = 0;
-    var result = 0;
-    var started = false;
-    var words = text.trim().split(/[ -]/);
-    for (var i = 0; i < words.length; i++) {
-      var word = words[i];
-      if (!(word in numberWords)) {
-        // This causes a break only if we've at least once captured something
-        if (started) {
-          break;
-        }
-        continue;
-      }
-      started = true;
-
-      var values = numberWords[word];
-      var scale = values[0];
-      var increment = values[1];
-      var current = current * scale + increment;
-      if (scale > 100) {
-        result += current;
-        current = 0;
-      }
-    }
-    result += current;
-    return (typeof result === 'number') && result > 0 ? result : null;
+  if (!allPassed) {
+    failures.push(test);
   }
 
-  // Parse a string for a count
-  function parseTitle(title) {
-    title = (title || '').trim().toLowerCase();
-    for (var i = 0; i < regExes.length; i++) {
-      var exp = regExes[i];
-      exp.lastIndex = 0; // Reset it
-
-      var result = handleMatch(title.match(exp));
-      if (result) {
-        return result;
-      }
-    }
-    return null;
-  }
-
-  expose.regExes = regExes;
-  expose.handleMatch = handleMatch;
-  expose.parseTitle = parseTitle;
-
-  return parseTitle;
+  console.group(title);
+  console.table(allMatchesForTest);
+  console.groupEnd();
+});
+console.log(' ');
+if (failures.length > 0) {
+  console.group(red('' + failures.length + ' Failed Tests:'))
+  failures.forEach((t) => { console.log(chalk.red('"' + t[0] + '"')); });
+  console.groupEnd();
+  process.exit(1);
+} else {
+  console.log(green('All tests passed'));
+  process.exit(0);
 }
