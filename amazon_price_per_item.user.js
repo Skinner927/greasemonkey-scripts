@@ -3,10 +3,11 @@
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @author       skinner927
-// @version      1.4
+// @version      1.5
 // @match        *://*.amazon.com/s/*
 // @match        *://*.amazon.com/s?*
 // @match        *://*.amazon.com/*/dp/*
+// @match        *://*.amazon.com/dp/*
 // @run-at       document-start
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
@@ -15,6 +16,7 @@
 // ==/UserScript==
 
 /* Changelog *
+ * 1.5 - Add ReviewMeta and Fakespot review rating buttons.
  * 1.4 - Improve testing & debugging. Fixed newSuggestedItem.
  * 1.3 - Add sweet title parser buildTitleParser() for parsing human words.
  * 1.2 - Fix for prices that show a range (eg. $22.95 - $40.22).
@@ -36,6 +38,7 @@
   if (returnExports) {
     return {
       buildTitleParser: buildTitleParser,
+      pollUntil: pollUntil,
     };
   }
   // If we're not returning exports, run the gm script
@@ -62,20 +65,64 @@
     }
   }
 
+  function noop(){}
+
+  // Reviewers
+  // https://imgur.com/a/pL9d7ky
+  var reviewers = [
+    {
+      title: 'ReviewMeta',
+      img: 'https://i.imgur.com/fnNe1Uw.png',
+      urlPrefix: 'https://reviewmeta.com/search?q=',
+      urlSuffix: '',
+    },
+    {
+      title: 'Fakespot',
+      img: 'https://i.imgur.com/lyqq1NG.png',
+      urlPrefix: 'https://www.fakespot.com/analyze?url=',
+      urlSuffix: '',
+    }
+  ];
+
+  function generateReviewLinks(itemUrl, cssWidth) {
+    itemUrl = itemUrl ? encodeURIComponent(itemUrl) : null;
+    cssWidth = cssWidth || '20px';
+
+    return reviewers.map(function(r) {
+      var href = '';
+      if (itemUrl) {
+        var fullUrl = r.urlPrefix + itemUrl + r.urlPrefix;
+        href = ` href="${fullUrl}" target="_blank" `;
+      }
+      return `
+      <a ${href} title="${r.title}" style="text-decoration: none;">
+        <img src="${r.img}" style="height: auto; width: ${cssWidth};" />
+      </a>
+      `;
+    });
+  }
+
   var getCountFromTitle = buildTitleParser();
 
+  var searchPageItemCounter = 0;
   // Gets called for each search page product item
+  // eg: https://www.amazon.com/s?k=air+duster&i=office-products
   function newSearchPageItem($item) {
-    log('newSearchPageItem', $item);
+    var itemId = searchPageItemCounter++;
+    log('newSearchPageItem', itemId, $item);
 
     // There's no longer an easy way to snag the title so we have to
     // figure the "title" is any element that's not the price.
     // Additionally, it seems css class prefixes change by the day so we have
     // to use goofy selectors.
+    var $title = null;
     var $price = null;
     var text = [];
     $item.find('a[class*="text-normal"]').each(function() {
       var $a = $(this);
+      if (!$title) {
+        $title = $a; // Likely the first anchor is the title
+      }
       var price = $a.find('[class*="price"]').first();
       if (price.length) {
         $price = price;
@@ -87,13 +134,34 @@
       }
     });
     text = text.join('\n');
+    if (!text || !$title) {
+      log('Cannot find title', itemId, $item);
+      return;
+    }
+
+    // Add review links to title
+    var parent = $title.parent().parent(); // div > h2 > $title
+    // Links are not immediately bound so we must poll for them
+    pollUntil({
+      success: (url) => {
+        var a = generateReviewLinks(url).join('\n');
+        parent.append($('<div />').addClass(ID).append(a));
+      },
+      failure: () => log('No title link for ', $item),
+      // prop gives us absolute url
+      test: () => $title.prop('href'),
+      // 100intv * 100loop / 1000ms = 10s (random adds some jitter)
+      interval: 100 + Math.floor((Math.random() * 10) + 1),
+      loops: 100,
+    });
+
     var countInPack = getCountFromTitle(text);
 
     if (!countInPack) {
-      log('Cannot find count', text, $item);
+      log('Cannot find count', itemId, text, $item);
       return;
     } else if (!$price) {
-      log('Cannot find price', text, $item);
+      log('Cannot find price', itemId, text, $item);
       return;
     }
 
@@ -105,7 +173,7 @@
     var cents = getNumberFrom($price.find('[class*="price-fraction"]').first());
 
     if (isNaN(whole) || isNaN(cents)) {
-      log('Bad price', $item);
+      log('Bad price', itemId, $item);
       return;
     }
 
@@ -125,14 +193,20 @@
     </div>
     `).addClass(ID).appendTo($row);
 
-    log('Success', $item);
+    log('Success', itemId, $item);
   }
 
-  // Get's called on each product details page
+  // Gets called on each product details page
+  // https://www.amazon.com/Dust-Off-Compressed-Gas-Duster-Pack/dp/B01MQFCYW0
   function newItemDetails($title) {
     log('newItemDetails', $title);
-    var countInPack = getCountFromTitle($title.text());
 
+    // Add review links
+    var a = generateReviewLinks(window.location.href.split('#')[0], '40px').join('\n');
+    $title.parent().parent().append($('<div />').addClass(ID).append(a));
+
+    // Count
+    var countInPack = getCountFromTitle($title.text());
     if (!countInPack) {
       log('No count', $title);
       return;
@@ -163,8 +237,18 @@
     `).addClass(ID).appendTo($price.closest('tr').parent());
   }
 
+  // Suggested items are towards the bottom of a product page
+  // "Customers who shopped for this item, also purchased..."
   function newSuggestedItem($item) {
     log('newSuggestedItem', $item);
+
+    var $a = $item.find('a').first();
+    var addTo = $a.parent();
+
+    // Review buttons
+    var a = generateReviewLinks($a.prop('href')).join('\n');
+    addTo.append($('<div class="a-row" />').addClass(ID).append(a));
+
     var title = $item.find('.p13n-sc-truncate').text().trim();
     if (!title) {
       title = $item.find('.p13n-sc-truncated').text().trim();
@@ -197,7 +281,7 @@
       Estimated ${perItem} per item
       <div class="a-color-secondary">(${countInPack} @ ${priceInDollars})</div>
     </div>
-    `).addClass(ID).appendTo($price.closest('.p13n-asin'));
+    `).addClass(ID).appendTo(addTo);
   }
 
   // Called once jQuery is loaded and page is ready
@@ -230,13 +314,34 @@
       });
     }
 
+    // Prevent hitting an element twice with the same handler (was happening)
+    function noDupes(key, fn) {
+      return function wrapper($el) {
+        if (!$el.data(key)) {
+          $el.data(key, true);
+          fn($el);
+        }
+      };
+    }
+
     // Product search pages
-    waitForKeyElements('.s-result-item', newSearchPageItem, false);
+    waitForKeyElements(
+      '.s-result-item',
+      noDupes(ID + '-newSearchPageItem', newSearchPageItem),
+      false
+    );
     // Individual product page
-    waitForKeyElements('#productTitle', newItemDetails, false);
+    waitForKeyElements(
+      '#productTitle',
+      noDupes(ID + '-newItemDetails', newItemDetails),
+      false
+    );
     // Suggested items on the individual product pages
-    waitForKeyElements('.a-carousel-card[role="listitem"]', newSuggestedItem,
-      false);
+    waitForKeyElements(
+      '.a-carousel-card[role="listitem"]',
+      noDupes(ID + '-newSuggestedItem', newSuggestedItem),
+      false
+    );
   }
 
   // Wait for jQuery to be loaded
@@ -271,6 +376,82 @@
       fixed += 1 / Math.pow(10, precision);
     }
     return fixed.toFixed(precision);
+  }
+
+  /**
+   * Poll a function until the value you're looking for is returned.
+   *
+   * @param {Function|object|null} successOrObj If validator passes this is
+   *  called. If given an object its keys are pulled as the same parameters to
+   *  this function.
+   * @param {Function|null} failure If we've timed out this is called.
+   * @param {Function} test Function to return the test value. Called once
+   *  for every test iteration.
+   * @param {Function|null} validator Special function that is passed the
+   *  return value of the `test()`. Should return `true` if the the given
+   *  value is what you are looking for. If no validator function is given,
+   *  we simply evaluate the return of `test()` for truthy.
+   * @param {int} interval Time in ms to sleep between iterations.
+   * @param {int} loops Number of iterations.
+   * @param {int} _iniL Internal flag to know the original loop count and to
+   *  trigger validation checks. Do not pass this manually.
+   */
+  function pollUntil(successOrObj, failure, test, validator, interval, loops, _iniL) {
+    var success = successOrObj;
+    if (typeof successOrObj === 'object') {
+      // Extract params
+      success = successOrObj.success;
+      failure = failure || successOrObj.failure;
+      test = test || successOrObj.test;
+      validator = validator || successOrObj.validator;
+      interval = interval || successOrObj.interval;
+      loops = loops || successOrObj.loops;
+    }
+    // Validate on first run only
+    if (typeof _ol !== 'number') {
+      success = success || noop;
+      if (typeof test !== 'function') {
+        throw Error('success must be a function or null');
+      }
+      failure = failure || noop;
+      if (typeof test !== 'function') {
+        throw Error('failure must be a function or null');
+      }
+      if (typeof test !== 'function') {
+        throw Error('test must be a function (how else else are we gonna test?)');
+      }
+      if (validator && typeof validator !== 'function') {
+        throw Error('validator must be a function');
+      }
+      if (typeof interval !== 'number') {
+        throw Error('interval must be a number');
+      }
+      if (typeof loops !== 'number') {
+        throw Error('loops must be a number');
+      }
+      if (loops < 1) {
+        throw Error('You cannot start pollUntil with anything less than 1 loop');
+      }
+      _iniL = loops; // initial loops
+    }
+
+    var val = void 0;
+    if (loops > 0) {
+      val = test();
+      if (validator ? validator(val, loops, _iniL) : !!val) {
+        // passed!
+        success(val, loops, _iniL);
+        return;
+      }
+    }
+    var nextLoops = loops - 1;
+    if (nextLoops <= 0) {
+      // Out of time, thanks for playing
+      failure(val, loops, _iniL);
+      return;
+    }
+    // Try again
+    setTimeout(pollUntil, interval, success, failure, test, validator, interval, nextLoops, _iniL);
   }
 
   function buildTitleParser(expose) {

@@ -30,24 +30,17 @@ var chalk = null;
 try {
   chalk = require('chalk');
 } catch (e) {
-  // pass
+  function format() {
+    return Array.prototype.slice.call(arguments).join(' ');
+  }
+  chalk = {
+    red: format,
+    green: format,
+  }
 }
+
 var expose = {};
 var getCountFromTitle = gmScript.buildTitleParser(expose);
-
-// Colors
-function red() {
-  if (chalk) {
-    return chalk.red.apply(chalk, arguments);
-  }
-  return Array.prototype.slice.call(arguments).join(' ');
-}
-function green() {
-  if (chalk) {
-    return chalk.green.apply(chalk, arguments);
-  }
-  return Array.prototype.slice.call(arguments).join(' ');
-}
 
 // Run each test
 var failures = [];
@@ -75,13 +68,13 @@ tests.forEach(function(test) {
   });
 
   var title = '"' + test[0] + '": ' + (allPassed ? '✔' : 'FAILED');
-  title = allPassed ? green(title) : red(title);
+  title = allPassed ? chalk.green(title) : chalk.red(title);
 
   if (!usagePassed) {
-    title += red(' | Usage did not pass');
+    title += chalk.red(' | Usage did not pass');
   }
   if (!onePassed) {
-    title += red(' | None of the individual regex passed');
+    title += chalk.red(' | None of the individual regex passed');
   }
 
   if (!allPassed) {
@@ -94,11 +87,11 @@ tests.forEach(function(test) {
 });
 console.log(' ');
 if (failures.length > 0) {
-  console.group(red('' + failures.length + ' Failed Tests:'))
+  console.group(chalk.red('' + failures.length + ' Failed Tests:'))
   failures.forEach((t) => { console.log(chalk.red('"' + t[0] + '"')); });
   console.groupEnd();
   process.exit(1);
 } else {
-  console.log(green('All tests passed'));
+  console.log(chalk.green('All tests passed'));
   process.exit(0);
 }
