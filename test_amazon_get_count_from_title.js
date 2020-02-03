@@ -23,6 +23,7 @@ var tests = [
   ['1pack', 1],
   ['package of 22', 22],
   ['strip of 82', 82],
+  ['[6.6ft 2-Pack]', 2],
 ];
 
 var gmScript = require('./amazon_price_per_item.user.js');

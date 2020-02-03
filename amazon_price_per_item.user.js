@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @author       skinner927
-// @version      1.5
+// @version      1.6
 // @match        *://*.amazon.com/s/*
 // @match        *://*.amazon.com/s?*
 // @match        *://*.amazon.com/*/dp/*
@@ -16,6 +16,8 @@
 // ==/UserScript==
 
 /* Changelog *
+ * 1.6 - Add ability to debug via url param `appi=1`. Fix review links and
+         missing suggested items.
  * 1.5 - Add ReviewMeta and Fakespot review rating buttons.
  * 1.4 - Improve testing & debugging. Fixed newSuggestedItem.
  * 1.3 - Add sweet title parser buildTitleParser() for parsing human words.
@@ -44,8 +46,11 @@
   // If we're not returning exports, run the gm script
   var ID = 'gm_amazon_price_per_item';
   var DEBUG = false;
+  if (!DEBUG && window.location.search.indexOf('appi=1')) {
+    DEBUG = true;
+  }
   // We blast this simply so we can get a context if we need to debug
-  console.log(ID, 'Starting');
+  console.log(ID, 'Starting', window.location);
 
   // TODO: Drop this if everything is working
   // var realUnsafeWindow = (function getUnsafeWindow() {
@@ -64,6 +69,7 @@
       console.info.apply(console, args);
     }
   }
+  log('will log all messages')
 
   function noop(){}
 
@@ -91,7 +97,7 @@
     return reviewers.map(function(r) {
       var href = '';
       if (itemUrl) {
-        var fullUrl = r.urlPrefix + itemUrl + r.urlPrefix;
+        var fullUrl = r.urlPrefix + itemUrl + r.urlSuffix;
         href = ` href="${fullUrl}" target="_blank" `;
       }
       return `
@@ -108,8 +114,19 @@
   // Gets called for each search page product item
   // eg: https://www.amazon.com/s?k=air+duster&i=office-products
   function newSearchPageItem($item) {
+    function localLog() {
+      var args = Array.prototype.slice.call(arguments);
+      args.unshift('newSearchPageItem')
+      log.apply(log, args)
+    }
+
     var itemId = searchPageItemCounter++;
-    log('newSearchPageItem', itemId, $item);
+    localLog(itemId, $item);
+
+    if (!$item.data('asin')) {
+      localLog('No asin, likely suggested item container, skipping');
+      return;
+    }
 
     // There's no longer an easy way to snag the title so we have to
     // figure the "title" is any element that's not the price.
@@ -135,7 +152,7 @@
     });
     text = text.join('\n');
     if (!text || !$title) {
-      log('Cannot find title', itemId, $item);
+      localLog('Cannot find title', itemId, $item);
       return;
     }
 
@@ -147,7 +164,7 @@
         var a = generateReviewLinks(url).join('\n');
         parent.append($('<div />').addClass(ID).append(a));
       },
-      failure: () => log('No title link for ', $item),
+      failure: () => localLog('No title link for ', $item),
       // prop gives us absolute url
       test: () => $title.prop('href'),
       // 100intv * 100loop / 1000ms = 10s (random adds some jitter)
@@ -158,10 +175,10 @@
     var countInPack = getCountFromTitle(text);
 
     if (!countInPack) {
-      log('Cannot find count', itemId, text, $item);
+      localLog('Cannot find count', itemId, text, $item);
       return;
     } else if (!$price) {
-      log('Cannot find price', itemId, text, $item);
+      localLog('Cannot find price', itemId, text, $item);
       return;
     }
 
@@ -173,7 +190,7 @@
     var cents = getNumberFrom($price.find('[class*="price-fraction"]').first());
 
     if (isNaN(whole) || isNaN(cents)) {
-      log('Bad price', itemId, $item);
+      localLog('Bad price', itemId, $item);
       return;
     }
 
@@ -187,19 +204,24 @@
     $(`
     <div class="a-row a-spacing-none">
       <div class="a-size-small a-text-normal">
-        <span class="a-color-secondary">Estimated ${perItem} per item</span>
-        (${countInPack} @ ${priceInDollars})
+        Estimated ${perItem} per item
+        <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
       </div>
     </div>
     `).addClass(ID).appendTo($row);
 
-    log('Success', itemId, $item);
+    localLog('Success', itemId, $item);
   }
 
   // Gets called on each product details page
   // https://www.amazon.com/Dust-Off-Compressed-Gas-Duster-Pack/dp/B01MQFCYW0
   function newItemDetails($title) {
-    log('newItemDetails', $title);
+    function localLog() {
+      var args = Array.prototype.slice.call(arguments);
+      args.unshift('newItemDetails')
+      log.apply(log, args)
+    }
+    localLog($title);
 
     // Add review links
     var a = generateReviewLinks(window.location.href.split('#')[0], '40px').join('\n');
@@ -208,7 +230,7 @@
     // Count
     var countInPack = getCountFromTitle($title.text());
     if (!countInPack) {
-      log('No count', $title);
+      localLog('No count', $title);
       return;
     }
 
@@ -220,7 +242,7 @@
     var cents = parseInt(priceParts[1], 10);
 
     if (isNaN(whole) || isNaN(cents)) {
-      log('Bad price', $title);
+      localLog('Bad price', $title);
       return;
     }
 
@@ -240,34 +262,42 @@
   // Suggested items are towards the bottom of a product page
   // "Customers who shopped for this item, also purchased..."
   function newSuggestedItem($item) {
-    log('newSuggestedItem', $item);
+    function localLog() {
+      var args = Array.prototype.slice.call(arguments);
+      args.unshift('newSuggestedItem')
+      log.apply(log, args)
+    }
+    localLog($item);
 
-    var $a = $item.find('a').first();
-    var addTo = $a.parent();
+    var $a = $item.find('a.a-link-normal.a-text-normal').first();
+    var addTo = $a.parent().parent();
 
     // Review buttons
     var a = generateReviewLinks($a.prop('href')).join('\n');
-    addTo.append($('<div class="a-row" />').addClass(ID).append(a));
+    addTo.append(
+      $('<div class="a-size-mini a-spacing-none a-spacing-top-small '+ ID + '_sug" />')
+        .addClass(ID).append(a)
+    );
 
-    var title = $item.find('.p13n-sc-truncate').text().trim();
+    var title = $a.text().trim();
     if (!title) {
-      title = $item.find('.p13n-sc-truncated').text().trim();
+      title = $item.find('a[href] > span').text().trim();
     }
     var countInPack = getCountFromTitle(title);
 
     if (!countInPack) {
-      log('No count', $item);
+      localLog('No count', $item);
       return;
     }
 
-    var $price = $item.find('.p13n-sc-price');
+    var $price = $item.find('.a-price > span').first();
     var priceParts = $price.text().trim()
       .replace('$', '').split('.');
     var whole = parseInt(priceParts[0], 10);
     var cents = parseInt(priceParts[1], 10);
 
     if (isNaN(whole) || isNaN(cents)) {
-      log('Bad price', $title);
+      localLog('Bad price', $title);
       return;
     }
 
@@ -276,12 +306,14 @@
     var perItem = '$' + toFixedCeil(price / countInPack / 100, 2);
     var priceInDollars = '$' + whole + '.' + cents;
 
-    $(`
-    <div class="a-row a-size-small">
-      Estimated ${perItem} per item
-      <div class="a-color-secondary">(${countInPack} @ ${priceInDollars})</div>
-    </div>
-    `).addClass(ID).appendTo(addTo);
+    $price.parents('.a-row').first().after(
+      `
+      <div class="a-row a-text-normal ${ID}">
+        Estimated ${perItem} per item
+        <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
+      </div>
+      `
+    );
   }
 
   // Called once jQuery is loaded and page is ready
@@ -346,8 +378,10 @@
 
   // Wait for jQuery to be loaded
   if (window.$) {
+    log('jQuery is on the page, starting main');
     $(main);
   } else {
+    log('waiting for jQuery')
     var waitForJQ = null;
     var count = 0;
     var clearWaitForJQ = function() {
@@ -359,6 +393,7 @@
     waitForJQ = window.setInterval(function() {
       count++;
       if (window.$ && waitForJQ) {
+        log('Found jQuery and starting main');
         clearWaitForJQ();
         $(main);
       } else if (count > 300) {
