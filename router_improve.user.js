@@ -3,11 +3,15 @@
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/router_improve.user.js
 // @author       skinner927
-// @version      0.1
+// @version      0.2
 // @description  Adds helpful buttons to the router interface
 // @match        https://192.168.7.1/*
 // @grant        GM_addStyle
 // ==/UserScript==
+
+/* Changelog
+  - 0.2 - Added DHCP clients shortcut
+*/
 
 (function() {
     'use strict';
@@ -73,6 +77,31 @@
         });
     }
 
+    function openNetwork(next) {
+        _click(document.querySelector('a[name="basic-setting"]'), 'deployed');
+        if (next) {
+            _next(next);
+        }
+    }
+
+    function openNetworkLan(next) {
+        openNetwork(function() {
+            _click(document.querySelector('a[name="lan-settings"]'), 'selected');
+            if (next) {
+                _next(next);
+            }
+        });
+    }
+
+    function openNetworkLanDHCPClientList(next) {
+        openNetworkLan(function() {
+            _clickTab(document.querySelector('a[data-name="clientlist"]'));
+            if (next) {
+                _next(next);
+            }
+        });
+    }
+
     // Build menu
     GM_addStyle(`
 .ds-main-menu {
@@ -104,6 +133,13 @@ margin: 0 4px;
         openTransmissionNatVirtualServers();
     });
     mainMenu.appendChild(btnVirtualServers);
+
+    var btnDHCPClientList = document.createElement('button');
+    btnDHCPClientList.innerHTML = 'DHCP Clients'
+    btnDHCPClientList.addEventListener('click', function() {
+        openNetworkLanDHCPClientList();
+    });
+    mainMenu.appendChild(btnDHCPClientList);
 
 })();
 
