@@ -4,11 +4,16 @@
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_smile_redirect.user.js
 // @icon         https://www.google.com/s2/favicons?domain=smile.amazon.com
 // @author       skinner927
-// @version      1.0
+// @version      1.1
 // @match        *://*.amazon.com/*
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
+
+/* Changelog *
+ * 1.1 - Fix ES5 compat.
+ * 1.0 - Initial release.
+ */
 
 /*
  * Most of logic taken from https://github.com/webdevnerdstuff/amazon-smile-redirect
@@ -26,7 +31,7 @@
   ];
 
   // assets/js/content.js
-  const EXCLUDED_DOMAINS = [
+  var EXCLUDED_DOMAINS = [
     'smile.amazon.', // Added this one as it's obvious
     'advertising.amazon.',
     'affiliate-program.amazon.',
@@ -51,7 +56,7 @@
       i = 1;
       level = arguments[0];
     }
-    var args = ['GM Smile:'];
+    var args = ['gm_amazon_smile_redirect:'];
     for (; i < arguments.length; i++) {
       args.push(arguments[i]);
     }
