@@ -2,8 +2,9 @@
 // @name         Amazon price per item
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
+// @icon         https://www.google.com/s2/favicons?domain=amazon.com
 // @author       skinner927
-// @version      1.7
+// @version      1.8
 // @match        *://*.amazon.com/s/*
 // @match        *://*.amazon.com/s?*
 // @match        *://*.amazon.com/*/dp/*
@@ -16,6 +17,7 @@
 // ==/UserScript==
 
 /* Changelog *
+ * 1.8 - Add icon
  * 1.7 - Add X per Y (3 per box) support.
  * 1.6 - Add ability to debug via url param `appi=1`. Fix review links and
          missing suggested items.
