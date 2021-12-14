@@ -1,16 +1,22 @@
 // ==UserScript==
 // @name         Snipe-IT Dymo Printer
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
-// @version      0.2
+// @version      0.3
 // @description  Add Dymo printer support to Snipe IT.
 // @author       skinner927
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/dymo-snipe-it/print.user.js
 // @match        https://*.snipe-it.io/hardware/bulkedit
-// @icon         https://www.google.com/s2/favicons?domain=snipe-it.io
+// @icon         https://www.google.com/s2/favicons?domain=snipeitapp.com
 // @require      https://raw.githack.com/Nycto/PicoModal/master/src/picoModal.js
 // @grant        GM_addStyle
 // @grant        GM_addElement
 // ==/UserScript==
+
+/**
+ * Changelog
+ * 0.3
+ *   - Update icon domain
+ */
 
 (function() {
   'use strict';

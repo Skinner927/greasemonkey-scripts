@@ -4,13 +4,14 @@
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_smile_redirect.user.js
 // @icon         https://www.google.com/s2/favicons?domain=smile.amazon.com
 // @author       skinner927
-// @version      1.1
+// @version      1.2
 // @match        *://*.amazon.com/*
-// @run-at       document-idle
+// @run-at       document-start
 // @grant        none
 // ==/UserScript==
 
 /* Changelog *
+ * 1.2 - Faster.
  * 1.1 - Fix ES5 compat.
  * 1.0 - Initial release.
  */
@@ -63,6 +64,25 @@
     console[level].apply(console, args);
   }
 
+  function waitFor(fn, callback, retries, delay, loopCount) {
+    // Defaults to 15 seconds. 150 retries * 100ms = 15s
+    retries = (typeof(retries) === 'undefined') ? 150 : retries;
+    delay = (typeof(delay) === 'undefined') ? 100 : retries;
+    loopCount = loopCount || 0;
+
+    var el = fn();
+    if (el) {
+      // report success
+      callback(el);
+    } else if (loopCount < retries) {
+      // try again
+      window.setTimeout(waitFor, delay, fn, callback, retries, delay, loopCount + 1);
+    } else {
+      // report error
+      callback(null);
+    }
+  }
+
   var i = 0;
 
   var path = window.location.pathname;
@@ -81,14 +101,21 @@
     }
   }
 
-  var navTools = document.getElementById('nav-tools');
-  if (!navTools || navTools.textContent.indexOf('Hello') == -1) {
-    log('Exiting. Not logged in.');
-    return;
-  }
+  waitFor(function() {
+    return document.getElementById('nav-tools');
+  }, function navToolsHandler(navTools) {
+    if (!navTools) {
+      log('error', 'Failed to find nav-tools');
+      return;
+    }
 
-  // Redirect to smile :D
-  log('info', 'Redirecting to smile: ' + window.location);
-  window.location.replace('https://smile.amazon.com' + (window.location.pathname || '') + (location.search || ''));
+    if (navTools.textContent.indexOf('Hello') == -1) {
+      log('Exiting. Not logged in.');
+      return;
+    }
 
+    // Redirect to smile :D
+    log('info', 'Redirecting to smile: ' + window.location);
+    window.location.replace('https://smile.amazon.com' + (window.location.pathname || '') + (location.search || ''));
+  });
 })();
