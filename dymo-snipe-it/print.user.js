@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Snipe-IT Dymo Printer
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
-// @version      0.3
+// @version      0.4
 // @description  Add Dymo printer support to Snipe IT.
 // @author       skinner927
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/dymo-snipe-it/print.user.js
