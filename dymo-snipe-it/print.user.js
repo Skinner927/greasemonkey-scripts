@@ -7,13 +7,15 @@
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/dymo-snipe-it/print.user.js
 // @match        https://*.snipe-it.io/hardware/bulkedit
 // @icon         https://www.google.com/s2/favicons?domain=snipeitapp.com
-// @require      https://raw.githack.com/Nycto/PicoModal/master/src/picoModal.js
+// @require      https://yestacos.com/raw/Nycto/PicoModal/master/src/picoModal.js
 // @grant        GM_addStyle
 // @grant        GM_addElement
 // ==/UserScript==
 
 /**
  * Changelog
+ * 0.4
+ *   - Update script URLs as GitHub has added x-content-type-options headers.
  * 0.3
  *   - Update icon domain
  */
@@ -305,7 +307,8 @@ button, option, select {
   // For whatever reason I can't load this via @requires due to strict mode.
   // http://labelwriter.com/software/dls/sdk/docs/DYMOLabelFrameworkJavaScriptHelp/
   GM_addElement('script', {
-    src: 'http://labelwriter.com/software/dls/sdk/js/dymo.connect.framework.js',
+    //src: 'https://raw.githubusercontent.com/dymosoftware/dymo-connect-framework/master/dymo.connect.framework.min.js',
+    src: 'https://yestacos.com/raw/dymosoftware/dymo-connect-framework/master/dymo.connect.framework.min.js',
     type: 'text/javascript',
     charset: 'UTF-8',
   });
