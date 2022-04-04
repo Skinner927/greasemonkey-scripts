@@ -2,15 +2,16 @@
 // @name         Amazon smile redirect
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_smile_redirect.user.js
-// @icon         https://www.google.com/s2/favicons?domain=smile.amazon.com
+// @icon         https://smile.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.2
+// @version      1.3
 // @match        *://*.amazon.com/*
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
 
 /* Changelog *
+ * 1.3 - Fix missing console.hasOwnProperty function.
  * 1.2 - Faster.
  * 1.1 - Fix ES5 compat.
  * 1.0 - Initial release.
@@ -53,9 +54,20 @@
   function log() {
     var i = 0;
     var level = 'log';
-    if (arguments.length > 1 && console.hasOwnProperty(arguments[0])) {
-      i = 1;
-      level = arguments[0];
+    if (arguments.length > 1) {
+      // Something changed in GM (or FF?) and we can no longer console.hasOwnProperty()
+      switch(arguments[0]) {
+        case 'debug':
+        case 'error':
+        case 'info':
+        case 'log':
+        case 'table':
+        case 'warn':
+          if (typeof console[arguments[0]] === 'function') {
+            i = 1;
+            level = arguments[0];
+          }
+      }
     }
     var args = ['gm_amazon_smile_redirect:'];
     for (; i < arguments.length; i++) {
