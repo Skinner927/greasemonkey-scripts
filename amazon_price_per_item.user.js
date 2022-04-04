@@ -2,9 +2,9 @@
 // @name         Amazon price per item
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
-// @icon         https://www.google.com/s2/favicons?domain=amazon.com
+// @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.8
+// @version      1.9
 // @match        *://*.amazon.com/s/*
 // @match        *://*.amazon.com/s?*
 // @match        *://*.amazon.com/*/dp/*
@@ -17,7 +17,8 @@
 // ==/UserScript==
 
 /* Changelog *
- * 1.8 - Add icon
+ * 1.9 - Add CamelCamelCamel price tracker.
+ * 1.8 - Add icon.
  * 1.7 - Add X per Y (3 per box) support.
  * 1.6 - Add ability to debug via url param `appi=1`. Fix review links and
          missing suggested items.
@@ -90,24 +91,39 @@
       img: 'https://i.imgur.com/lyqq1NG.png',
       urlPrefix: 'https://www.fakespot.com/analyze?url=',
       urlSuffix: '',
+    },
+    {
+      title: 'CamelCamelCamel',
+      img: 'https://i.imgur.com/SmTu2yE.png',
+      urlPrefix: 'https://camelcamelcamel.com/search?sq=',
+      urlSuffix: '',
     }
   ];
 
+  // Returns an array of HTML strings.
   function generateReviewLinks(itemUrl, cssWidth) {
     itemUrl = itemUrl ? encodeURIComponent(itemUrl) : null;
     cssWidth = cssWidth || '20px';
 
     return reviewers.map(function(r) {
-      var href = '';
+      var a = document.createElement('a');
       if (itemUrl) {
-        var fullUrl = r.urlPrefix + itemUrl + r.urlSuffix;
-        href = ` href="${fullUrl}" target="_blank" `;
+        a.href = r.urlPrefix + itemUrl + r.urlSuffix;
+        a.target = '_blank';
       }
-      return `
-      <a ${href} title="${r.title}" style="text-decoration: none;">
-        <img src="${r.img}" style="height: auto; width: ${cssWidth};" />
-      </a>
-      `;
+      a.title = r.title;
+      a.style = 'text-decoration: none;';
+
+      var img = document.createElement('img');
+      img.src = r.img;
+      img.style = `height: auto; width: ${cssWidth};`;
+
+      a.appendChild(img);
+      var result = a.outerHTML;
+
+      img.remove()
+      a.remove();
+      return result;
     });
   }
 
