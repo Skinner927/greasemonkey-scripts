@@ -4,7 +4,7 @@
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.9
+// @version      1.10
 // @match        *://*.amazon.com/s/*
 // @match        *://*.amazon.com/s?*
 // @match        *://*.amazon.com/*/dp/*
@@ -17,17 +17,18 @@
 // ==/UserScript==
 
 /* Changelog *
- * 1.9 - Add CamelCamelCamel price tracker.
- * 1.8 - Add icon.
- * 1.7 - Add X per Y (3 per box) support.
- * 1.6 - Add ability to debug via url param `appi=1`. Fix review links and
-         missing suggested items.
- * 1.5 - Add ReviewMeta and Fakespot review rating buttons.
- * 1.4 - Improve testing & debugging. Fixed newSuggestedItem.
- * 1.3 - Add sweet title parser buildTitleParser() for parsing human words.
- * 1.2 - Fix for prices that show a range (eg. $22.95 - $40.22).
- * 1.1 - Add support for suggested items in item details.
- * 1.0 - Initial release.
+ * 1.10 - Fix item detail selector. Add 'pieces' and 'pcs' qualifiers.
+ * 1.9  - Add CamelCamelCamel price tracker.
+ * 1.8  - Add icon.
+ * 1.7  - Add X per Y (3 per box) support.
+ * 1.6  - Add ability to debug via url param `appi=1`. Fix review links and
+          missing suggested items.
+ * 1.5  - Add ReviewMeta and Fakespot review rating buttons.
+ * 1.4  - Improve testing & debugging. Fixed newSuggestedItem.
+ * 1.3  - Add sweet title parser buildTitleParser() for parsing human words.
+ * 1.2  - Fix for prices that show a range (eg. $22.95 - $40.22).
+ * 1.1  - Add support for suggested items in item details.
+ * 1.0  - Initial release.
  */
 
 // Hand rolled to work with node require and run in the browser
@@ -254,7 +255,7 @@
     }
 
     // If we got this far we should be on the page, so we can query directly
-    var $price = $('#priceblock_ourprice');
+    var $price = $('.a-price.priceToPay');
     var priceParts = $price.text().trim()
       .replace('$', '').split('.');
     var whole = parseInt(priceParts[0], 10);
@@ -271,11 +272,13 @@
     var priceInDollars = '$' + whole + '.' + cents;
 
     $(`
-    <tr><td colspan="2" class="a-size-base">
-      Estimated ${perItem} per item
-      <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
-    </td></tr>
-    `).addClass(ID).appendTo($price.closest('tr').parent());
+    <div class="a-section a-spacing-small aok-align-center">
+      <span class="a-size-small">
+        Estimated ${perItem} per item
+        <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
+      </span>
+    </div>
+    `).addClass(ID).insertAfter($price);
   }
 
   // Suggested items are towards the bottom of a product page
@@ -524,11 +527,15 @@
       ['', '[ -]*pack'],  // 2 pack or 2-pack or 2 -pack or 2pack
       ['', '[ ,]*count'], // 4 count or 4, count or 4Count
       ['\\w of ', ''],    // foobar of X: pack of 3, box of 12
+      ['', '[ -]*pieces'],// 2 pieces
+      ['', '[ -]*pcs'],  // 2 pcs
     ];
 
     var regExes = qualifiers.map(function(qual) {
       var words = '(?:[a-zA-Z\\-]+(?: |-)?){1,4}'; // We allow up to 4 words
-      return new RegExp(qual[0] + '(?:(\\d+)|(' + words + '))' + qual[1]);
+      return new RegExp(
+        '\\b' + qual[0] + '(?:(\\d+)|(' + words + '))' + qual[1] + '\\b', 'i'
+      );
     });
 
     // Let's build all word numbers
