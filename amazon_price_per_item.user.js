@@ -4,7 +4,7 @@
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.10
+// @version      1.11
 // @match        *://*.amazon.com/s/*
 // @match        *://*.amazon.com/s?*
 // @match        *://*.amazon.com/*/dp/*
@@ -17,6 +17,7 @@
 // ==/UserScript==
 
 /* Changelog *
+ * 1.11 - Fix item detail price selector.
  * 1.10 - Fix item detail selector. Add 'pieces' and 'pcs' qualifiers.
  * 1.9  - Add CamelCamelCamel price tracker.
  * 1.8  - Add icon.
@@ -76,7 +77,7 @@
   }
   log('will log all messages')
 
-  function noop(){}
+  function noop() { }
 
   // Reviewers
   // https://imgur.com/a/pL9d7ky
@@ -250,19 +251,30 @@
     // Count
     var countInPack = getCountFromTitle($title.text());
     if (!countInPack) {
-      localLog('No count', $title);
+      localLog('No count on details', $title);
       return;
     }
 
     // If we got this far we should be on the page, so we can query directly
-    var $price = $('.a-price.priceToPay');
-    var priceParts = $price.text().trim()
-      .replace('$', '').split('.');
+    var $price = $('#priceblock_ourprice');
+    if (!$price.length) {
+      $price = $('.apexPriceToPay');
+      if (!$price.length) {
+        localLog('Cannot find price on details', $title);
+        return;
+      }
+    }
+    var textPrice = $price.text().match(/\$\d+\.\d\d/);
+    if (!textPrice) {
+      localLog('Bad textPrice on details', $title);
+      return;
+    }
+    var priceParts = textPrice[0].replace('$', '').split('.');
     var whole = parseInt(priceParts[0], 10);
     var cents = parseInt(priceParts[1], 10);
 
     if (isNaN(whole) || isNaN(cents)) {
-      localLog('Bad price', $title);
+      localLog('Bad price on details', $title);
       return;
     }
 
@@ -297,7 +309,7 @@
     // Review buttons
     var a = generateReviewLinks($a.prop('href')).join('\n');
     addTo.append(
-      $('<div class="a-size-mini a-spacing-none a-spacing-top-small '+ ID + '_sug" />')
+      $('<div class="a-size-mini a-spacing-none a-spacing-top-small ' + ID + '_sug" />')
         .addClass(ID).append(a)
     );
 
