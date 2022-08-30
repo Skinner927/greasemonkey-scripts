@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Snipe-IT Dymo Printer
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
-// @version      0.4
+// @version      0.5
 // @description  Add Dymo printer support to Snipe IT.
 // @author       skinner927
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/dymo-snipe-it/print.user.js
@@ -14,6 +14,8 @@
 
 /**
  * Changelog
+ * 0.5
+ *   - Pin broken framework.js url.
  * 0.4
  *   - Update script URLs as GitHub has added x-content-type-options headers.
  * 0.3
@@ -308,7 +310,7 @@ button, option, select {
   // http://labelwriter.com/software/dls/sdk/docs/DYMOLabelFrameworkJavaScriptHelp/
   GM_addElement('script', {
     //src: 'https://raw.githubusercontent.com/dymosoftware/dymo-connect-framework/master/dymo.connect.framework.min.js',
-    src: 'https://yestacos.com/raw/dymosoftware/dymo-connect-framework/master/dymo.connect.framework.min.js',
+    src: 'https://yestacos.com/raw/dymosoftware/dymo-connect-framework/cf7bced5280f95c7fb4f12f72abb27fc13526fbc/dymo.connect.framework.min.js',
     type: 'text/javascript',
     charset: 'UTF-8',
   });
