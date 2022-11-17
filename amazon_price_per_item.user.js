@@ -4,11 +4,8 @@
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.11
-// @match        *://*.amazon.com/s/*
-// @match        *://*.amazon.com/s?*
-// @match        *://*.amazon.com/*/dp/*
-// @match        *://*.amazon.com/dp/*
+// @version      1.12
+// @match        *://*.amazon.com/*
 // @run-at       document-start
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
@@ -17,6 +14,7 @@
 // ==/UserScript==
 
 /* Changelog *
+ * 1.12 - Amazon has many sub-paths, so now match everything.
  * 1.11 - Fix item detail price selector.
  * 1.10 - Fix item detail selector. Add 'pieces' and 'pcs' qualifiers.
  * 1.9  - Add CamelCamelCamel price tracker.
