@@ -1,29 +1,35 @@
 // You need to run in node 10+.
 // This is an example of over engineering. Why I didn't use a test framework
-// or really just barf to console, I don't kow.
-var gmScript = require('./amazon_price_per_item.user.js');
+// or really just barf to console, I don't know.
+var gmScript = require("./amazon_price_per_item.user.js");
 var chalk = null;
 try {
-  chalk = require('chalk');
+  chalk = require("chalk");
 } catch (e) {
   function format() {
-    return Array.prototype.slice.call(arguments).join(' ');
+    return Array.prototype.slice.call(arguments).join(" ");
   }
   chalk = {
     red: format,
     green: format,
-  }
+  };
 }
 var pollUntil = gmScript.pollUntil;
 
 // Store test names
 var failures = [];
 
-function makeResultHandlers(testName, expectPass, testDone, testSuccessOk, testFailureOk) {
+function makeResultHandlers(
+  testName,
+  expectPass,
+  testDone,
+  testSuccessOk,
+  testFailureOk
+) {
   function final(passed, message) {
-    var fullMessage = (passed ? '✔ ' : 'FAILED ') + testName;
+    var fullMessage = (passed ? "✔ " : "FAILED ") + testName;
     if (message) {
-      fullMessage += ': ' + message;
+      fullMessage += ": " + message;
     }
     if (passed) {
       console.log(chalk.green(fullMessage));
@@ -36,8 +42,8 @@ function makeResultHandlers(testName, expectPass, testDone, testSuccessOk, testF
 
   function success(val, loops) {
     var passed = expectPass;
-    var msg = 'value ' + val;
-    if (typeof testSuccessOk === 'function') {
+    var msg = "value " + val;
+    if (typeof testSuccessOk === "function") {
       var res = testSuccessOk(val, loops);
       if (Array.isArray(res)) {
         passed = !!res[0];
@@ -51,8 +57,8 @@ function makeResultHandlers(testName, expectPass, testDone, testSuccessOk, testF
 
   function failure(val, loops) {
     var passed = !expectPass;
-    var msg = 'value ' + val;
-    if (typeof testFailureOk === 'function') {
+    var msg = "value " + val;
+    if (typeof testFailureOk === "function") {
       var res = testFailureOk(val, loops);
       if (Array.isArray(res)) {
         passed = !!res[0];
@@ -65,21 +71,21 @@ function makeResultHandlers(testName, expectPass, testDone, testSuccessOk, testF
   }
 
   function wrapper(fn) {
-    return function(val, loops) {
+    return function (val, loops) {
       try {
         fn(val, loops);
       } catch (e) {
         failures.push(testName);
-        console.log(chalk.red('UNHANDLED EXCEPTION', testName, e));
+        console.log(chalk.red("UNHANDLED EXCEPTION", testName, e));
       }
-    }
+    };
   }
 
   return [wrapper(success), wrapper(failure)];
 }
 
 function makeTestCounter(test, startAt, step) {
-  if (typeof step !== 'number') {
+  if (typeof step !== "number") {
     step = 1;
   }
   function wrapper() {
@@ -88,7 +94,7 @@ function makeTestCounter(test, startAt, step) {
       return test(wrapper);
     }
     return wrapper.counter;
-  };
+  }
   wrapper.counter = startAt || 0;
   return wrapper;
 }
@@ -99,7 +105,7 @@ function makeTestCounter(test, startAt, step) {
 var tests = [
   // TEST: Wait till 10
   function test_WaitTill10(testDone) {
-    var testName = 'Wait Till 10';
+    var testName = "Wait Till 10";
     var startLoops = 13; // should only need 10
 
     function validateSuccess(val, loop) {
@@ -116,7 +122,7 @@ var tests = [
       }
 
       if (!passed) {
-        return [false, msg.join('; ')];
+        return [false, msg.join("; ")];
       }
       return true;
     }
@@ -128,29 +134,29 @@ var tests = [
         return val >= 10;
       },
       0, // interval
-      startLoops,
+      startLoops
     );
   },
 
   // TEST: Truthy Validator 1
   function test_TruthyValidator1(testDone) {
     pollUntil(
-      ...makeResultHandlers('Truthy Validator 1', true, testDone),
+      ...makeResultHandlers("Truthy Validator 1", true, testDone),
       makeTestCounter(),
       null, // Use the default truthy
       0, // interval
-      1, // Should only need 1 loop
+      1 // Should only need 1 loop
     );
   },
 
   // TEST: Truthy Validator 2
   function test_TruthyValidator2(testDone) {
     pollUntil(
-      ...makeResultHandlers('Truthy Validator 2', true, testDone),
+      ...makeResultHandlers("Truthy Validator 2", true, testDone),
       makeTestCounter(null, 2),
       null, // Use the default truthy
       0, // interval
-      1, // Should pass immediately
+      1 // Should pass immediately
     );
   },
 
@@ -158,18 +164,18 @@ var tests = [
   function test_TruthyValidator3(testDone) {
     // Expect to fail because we'll never increment past 0
     pollUntil(
-      ...makeResultHandlers('Truthy Validator 3', false, testDone),
+      ...makeResultHandlers("Truthy Validator 3", false, testDone),
       () => 0,
       null, // Use the default truthy
       0, // interval
-      3, // Doesn't matter, do a few to ensure we don't somehow trigger success
+      3 // Doesn't matter, do a few to ensure we don't somehow trigger success
     );
   },
 
   // TEST: Object Params
   function test_ObjectParams(testDone) {
-    var flag = 'WINNER';
-    var t = makeResultHandlers('Object Params', true, testDone);
+    var flag = "WINNER";
+    var t = makeResultHandlers("Object Params", true, testDone);
     pollUntil({
       success: t[0],
       failure: t[1],
@@ -179,25 +185,28 @@ var tests = [
       loops: 10,
     });
   },
-
 ];
 
 ///////////////////////////
 // Run each test
 
 function final() {
-  console.log(' ');
+  console.log(" ");
   if (failures.length > 0) {
-    console.log(chalk.red('' + failures.length + ' Failed Tests:'))
-    failures.forEach((t) => { console.log(chalk.red('  ' + t)); });
+    console.log(chalk.red("" + failures.length + " Failed Tests:"));
+    failures.forEach((t) => {
+      console.log(chalk.red("  " + t));
+    });
     process.exit(1);
   } else {
-    console.log(chalk.green('All tests passed'));
+    console.log(chalk.green("All tests passed"));
     process.exit(0);
   }
 }
 
 var start = tests.reverse().reduce((previous, next) => {
-  return () => { next(previous); };
+  return () => {
+    next(previous);
+  };
 }, final);
 start();
