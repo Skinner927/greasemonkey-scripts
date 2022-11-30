@@ -4,6 +4,8 @@
 var gmScript = require("./amazon_price_per_item.user.js");
 var chalk = null;
 try {
+  // npm install chalk@4.x
+  // chalk 5+ is ESM
   chalk = require("chalk");
 } catch (e) {
   function format() {

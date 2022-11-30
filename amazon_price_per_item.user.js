@@ -4,7 +4,7 @@
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.12
+// @version      1.13
 // @match        *://*.amazon.com/*
 // @run-at       document-start
 // @grant        unsafeWindow
@@ -14,6 +14,7 @@
 // ==/UserScript==
 
 /* Changelog *
+ * 1.13 - Greatly improve estimates on "twister" product pages (multiple options).
  * 1.12 - Amazon has many sub-paths, so now match everything.
  * 1.11 - Fix item detail price selector.
  * 1.10 - Fix item detail selector. Add 'pieces' and 'pcs' qualifiers.
@@ -53,6 +54,7 @@
   if (!DEBUG && window.location.search.indexOf("appi=1")) {
     DEBUG = true;
   }
+  var STYLE_ESTIMATED = "color:blue;";
   // We blast this simply so we can get a context if we need to debug
   console.log(ID, "Starting", window.location);
 
@@ -130,6 +132,65 @@
   var getCountFromTitle = buildTitleParser();
 
   var searchPageItemCounter = 0;
+
+  function addEstimatedToElement(priceInPennies, itemCount, $sibling, style) {
+    if (!priceInPennies || !itemCount || !$sibling) {
+      return;
+    }
+    // Price in pennies
+    var perItem = "$" + toFixedCeil(priceInPennies / itemCount / 100, 2);
+    var priceInDollars = "$" + toFixedCeil(priceInPennies / 100, 2);
+
+    var $note = null;
+    if (1 == style) {
+      $note = $(`
+        <div class="a-section a-spacing-small aok-align-center">
+          <span class="a-size-small" title="${itemCount} @ ${priceInDollars}" style="${STYLE_ESTIMATED}">
+            ${perItem}/item
+          </span>
+        </div>
+      `);
+    } else {
+      $note = $(`
+        <div class="a-section a-spacing-small aok-align-center">
+          <span class="a-size-small">
+            <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
+            <span class="a-color-secondary">(${itemCount} @ ${priceInDollars})</span>
+          </span>
+        </div>
+      `);
+    }
+
+    $note.addClass(ID).insertAfter($sibling);
+  }
+
+  function parsePriceToPennies(priceText) {
+    if (!priceText) {
+      return null;
+    }
+    priceText = priceText.trim().replace("$", " ");
+
+    var whole = NaN;
+    var cents = NaN;
+    if (priceText.indexOf(".") !== -1) {
+      // Price is likely formatted like "11.22"
+      var priceParts = priceText.split(".");
+      whole = parseInt(priceParts[0], 10);
+      cents = parseInt(priceParts[1], 10);
+    } else {
+      // No decimal means we might be dealing with something like
+      // `44<sup>99</sup>`
+      whole = parseInt(priceText.slice(0, -2), 10);
+      cents = parseInt(priceText.slice(-2), 10);
+    }
+
+    if (isNaN(whole) || isNaN(cents)) {
+      return null;
+    }
+    // Price in pennies
+    return cents + whole * 100;
+  }
+
   // Gets called for each search page product item
   // eg: https://www.amazon.com/s?k=air+duster&i=office-products
   function newSearchPageItem($item) {
@@ -223,7 +284,7 @@
     $(`
     <div class="a-row a-spacing-none">
       <div class="a-size-small a-text-normal">
-        Estimated ${perItem} per item
+        <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
         <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
       </div>
     </div>
@@ -251,39 +312,75 @@
     ).join("\n");
     $title.parent().parent().append($("<div />").addClass(ID).append(a));
 
+    // There are many ways a product's price is displayed.
+    // When an item has options, such as colors or maybe multi-pack we have
+    // to analyze these options too. The option block is called "twister".
+    //
+    // 1. Single price -- no twister
+    // https://www.amazon.com/Gallon-White-Bucket-Lid-Container/dp/B008GMC8RM
+    //
+    // 2. Single price -- with twister with prices, but no titles (use parent's quantity)
+    // https://www.amazon.com/dp/B09L5MRR3L
+    //
+    // 3. No count, but other options have count but no prices!
+    //   Can't improve anything here unless we query the linked page (NO THANKS)
+    // https://www.amazon.com/dp/B098RX89VV
+    //
+    // 4. Single price with twister where each option has its own price and count.
+    // https://www.amazon.com/gp/product/B008KJEYLO
+    // https://www.amazon.com/Get-French-Kitchen-Dish-Sponge/dp/B0866QQW9F
+
+    var $price = null;
+    var priceInPennies = null;
     // Count
     var countInPack = getCountFromTitle($title.text());
     if (!countInPack) {
       localLog("No count on details", $title);
-      return;
+    } else {
+      do {
+        // case 1
+        $price = $(".a-price.priceToPay");
+        priceInPennies = parsePriceToPennies($price.text());
+        if (null !== priceInPennies) {
+          addEstimatedToElement(priceInPennies, countInPack, $price);
+          break;
+        }
+        // twister
+        $price = $("#snsDetailPagePrice");
+        priceInPennies = parsePriceToPennies($price.text());
+        if (null !== priceInPennies) {
+          addEstimatedToElement(priceInPennies, countInPack, $price);
+          break;
+        }
+
+        // TODO: add other case1 classes
+        localLog("failed to find case1 price", $title);
+      } while (0);
     }
 
-    // If we got this far we should be on the page, so we can query directly
-    var $price = $(".a-price.priceToPay");
-    var priceParts = $price.text().trim().replace("$", "").split(".");
-    var whole = parseInt(priceParts[0], 10);
-    var cents = parseInt(priceParts[1], 10);
-
-    if (isNaN(whole) || isNaN(cents)) {
-      localLog("Bad price on details", $title);
-      return;
-    }
-
-    // Price in pennies
-    var price = cents + whole * 100;
-    var perItem = "$" + toFixedCeil(price / countInPack / 100, 2);
-    var priceInDollars = "$" + whole + "." + cents;
-
-    $(`
-    <div class="a-section a-spacing-small aok-align-center">
-      <span class="a-size-small">
-        Estimated ${perItem} per item
-        <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
-      </span>
-    </div>
-    `)
-      .addClass(ID)
-      .insertAfter($price);
+    // Twister
+    $(".twisterSwatchWrapper").each(function () {
+      var $that = $(this);
+      var $price = $that.find(".unified-price").first();
+      if (!$price) {
+        localLog("Failed to find price for ", this);
+        return;
+      }
+      var priceInPennies = parsePriceToPennies($price.text());
+      if (null == priceInPennies) {
+        localLog("Failed to parse price ", $price);
+      }
+      var optionCount = getCountFromTitle($that.text());
+      if (null == optionCount) {
+        // use parent's
+        optionCount = countInPack;
+        if (null == optionCount) {
+          localLog("Failed to get count for ", this);
+          return;
+        }
+      }
+      addEstimatedToElement(priceInPennies, optionCount, $price, 1);
+    });
   }
 
   // Suggested items are towards the bottom of a product page
@@ -343,7 +440,7 @@
       .after(
         `
       <div class="a-row a-text-normal ${ID}">
-        Estimated ${perItem} per item
+        <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
         <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
       </div>
       `
@@ -560,9 +657,9 @@
     */
     var qualifiers = [
       ["", " per \\w"], // X per Box. X per pack.
-      ["", "[ -]*pack\\w"], // 2 pack or 2-pack or 2 -pack or 2pack (but not "packs")
+      ["", "[ -]*pack"], // 2 pack or 2-pack or 2 -pack or 2pack (but not "packs")
       ["", "[ ,]*count"], // 4 count or 4, count or 4Count
-      ["\\w of ", ""], // foobar of X: pack of 3, box of 12
+      ["\\w+ of ", ""], // foobar of X: pack of 3, box of 12
       ["", "[ -]*pieces"], // 2 pieces
       ["", "[ -]*pcs"], // 2 pcs
     ];

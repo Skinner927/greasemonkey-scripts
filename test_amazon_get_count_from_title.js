@@ -24,11 +24,16 @@ var tests = [
   ["package of 22", 22],
   ["strip of 82", 82],
   ["[6.6ft 2-Pack]", 2],
+  ["Sensitive Skin, 720 Count (12 packs),", 720],
+  ["pack of 12 (2 packs) cheese", 12],
+  ["(2 packs) pack of 12 cheese", 12],
 ];
 
 var gmScript = require("./amazon_price_per_item.user.js");
 var chalk = null;
 try {
+  // npm install chalk@4.x
+  // chalk 5+ is ESM
   chalk = require("chalk");
 } catch (e) {
   function format() {
