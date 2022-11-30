@@ -4,7 +4,7 @@
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.12
+// @version      1.13
 // @match        *://*.amazon.com/*
 // @run-at       document-start
 // @grant        unsafeWindow
@@ -14,6 +14,7 @@
 // ==/UserScript==
 
 /* Changelog *
+ * 1.13 - Greatly improve estimates on "twister" product pages (multiple options).
  * 1.12 - Amazon has many sub-paths, so now match everything.
  * 1.11 - Fix item detail price selector.
  * 1.10 - Fix item detail selector. Add 'pieces' and 'pcs' qualifiers.
@@ -31,8 +32,8 @@
  */
 
 // Hand rolled to work with node require and run in the browser
-(function(factory) {
-  if (typeof exports === 'object' && typeof module !== 'undefined') {
+(function (factory) {
+  if (typeof exports === "object" && typeof module !== "undefined") {
     // Just return exports
     module.exports = factory(true);
   } else {
@@ -40,7 +41,7 @@
     factory();
   }
 })(function factory(returnExports) {
-  'use strict';
+  "use strict";
   if (returnExports) {
     return {
       buildTitleParser: buildTitleParser,
@@ -48,13 +49,14 @@
     };
   }
   // If we're not returning exports, run the gm script
-  var ID = 'gm_amazon_price_per_item';
+  var ID = "gm_amazon_price_per_item";
   var DEBUG = false;
-  if (!DEBUG && window.location.search.indexOf('appi=1')) {
+  if (!DEBUG && window.location.search.indexOf("appi=1")) {
     DEBUG = true;
   }
+  var STYLE_ESTIMATED = "color:blue;";
   // We blast this simply so we can get a context if we need to debug
-  console.log(ID, 'Starting', window.location);
+  console.log(ID, "Starting", window.location);
 
   // TODO: Drop this if everything is working
   // var realUnsafeWindow = (function getUnsafeWindow() {
@@ -73,55 +75,55 @@
       console.info.apply(console, args);
     }
   }
-  log('will log all messages')
+  log("will log all messages");
 
-  function noop() { }
+  function noop() {}
 
   // Reviewers
   // https://imgur.com/a/pL9d7ky
   var reviewers = [
     {
-      title: 'ReviewMeta',
-      img: 'https://i.imgur.com/fnNe1Uw.png',
-      urlPrefix: 'https://reviewmeta.com/search?q=',
-      urlSuffix: '',
+      title: "ReviewMeta",
+      img: "https://i.imgur.com/fnNe1Uw.png",
+      urlPrefix: "https://reviewmeta.com/search?q=",
+      urlSuffix: "",
     },
     {
-      title: 'Fakespot',
-      img: 'https://i.imgur.com/lyqq1NG.png',
-      urlPrefix: 'https://www.fakespot.com/analyze?url=',
-      urlSuffix: '',
+      title: "Fakespot",
+      img: "https://i.imgur.com/lyqq1NG.png",
+      urlPrefix: "https://www.fakespot.com/analyze?url=",
+      urlSuffix: "",
     },
     {
-      title: 'CamelCamelCamel',
-      img: 'https://i.imgur.com/SmTu2yE.png',
-      urlPrefix: 'https://camelcamelcamel.com/search?sq=',
-      urlSuffix: '',
-    }
+      title: "CamelCamelCamel",
+      img: "https://i.imgur.com/SmTu2yE.png",
+      urlPrefix: "https://camelcamelcamel.com/search?sq=",
+      urlSuffix: "",
+    },
   ];
 
   // Returns an array of HTML strings.
   function generateReviewLinks(itemUrl, cssWidth) {
     itemUrl = itemUrl ? encodeURIComponent(itemUrl) : null;
-    cssWidth = cssWidth || '20px';
+    cssWidth = cssWidth || "20px";
 
-    return reviewers.map(function(r) {
-      var a = document.createElement('a');
+    return reviewers.map(function (r) {
+      var a = document.createElement("a");
       if (itemUrl) {
         a.href = r.urlPrefix + itemUrl + r.urlSuffix;
-        a.target = '_blank';
+        a.target = "_blank";
       }
       a.title = r.title;
-      a.style = 'text-decoration: none;';
+      a.style = "text-decoration: none;";
 
-      var img = document.createElement('img');
+      var img = document.createElement("img");
       img.src = r.img;
       img.style = `height: auto; width: ${cssWidth};`;
 
       a.appendChild(img);
       var result = a.outerHTML;
 
-      img.remove()
+      img.remove();
       a.remove();
       return result;
     });
@@ -130,20 +132,79 @@
   var getCountFromTitle = buildTitleParser();
 
   var searchPageItemCounter = 0;
+
+  function addEstimatedToElement(priceInPennies, itemCount, $sibling, style) {
+    if (!priceInPennies || !itemCount || !$sibling) {
+      return;
+    }
+    // Price in pennies
+    var perItem = "$" + toFixedCeil(priceInPennies / itemCount / 100, 2);
+    var priceInDollars = "$" + toFixedCeil(priceInPennies / 100, 2);
+
+    var $note = null;
+    if (1 == style) {
+      $note = $(`
+        <div class="a-section a-spacing-small aok-align-center">
+          <span class="a-size-small" title="${itemCount} @ ${priceInDollars}" style="${STYLE_ESTIMATED}">
+            ${perItem}/item
+          </span>
+        </div>
+      `);
+    } else {
+      $note = $(`
+        <div class="a-section a-spacing-small aok-align-center">
+          <span class="a-size-small">
+            <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
+            <span class="a-color-secondary">(${itemCount} @ ${priceInDollars})</span>
+          </span>
+        </div>
+      `);
+    }
+
+    $note.addClass(ID).insertAfter($sibling);
+  }
+
+  function parsePriceToPennies(priceText) {
+    if (!priceText) {
+      return null;
+    }
+    priceText = priceText.trim().replace("$", " ");
+
+    var whole = NaN;
+    var cents = NaN;
+    if (priceText.indexOf(".") !== -1) {
+      // Price is likely formatted like "11.22"
+      var priceParts = priceText.split(".");
+      whole = parseInt(priceParts[0], 10);
+      cents = parseInt(priceParts[1], 10);
+    } else {
+      // No decimal means we might be dealing with something like
+      // `44<sup>99</sup>`
+      whole = parseInt(priceText.slice(0, -2), 10);
+      cents = parseInt(priceText.slice(-2), 10);
+    }
+
+    if (isNaN(whole) || isNaN(cents)) {
+      return null;
+    }
+    // Price in pennies
+    return cents + whole * 100;
+  }
+
   // Gets called for each search page product item
   // eg: https://www.amazon.com/s?k=air+duster&i=office-products
   function newSearchPageItem($item) {
     function localLog() {
       var args = Array.prototype.slice.call(arguments);
-      args.unshift('newSearchPageItem')
-      log.apply(log, args)
+      args.unshift("newSearchPageItem");
+      log.apply(log, args);
     }
 
     var itemId = searchPageItemCounter++;
     localLog(itemId, $item);
 
-    if (!$item.data('asin')) {
-      localLog('No asin, likely suggested item container, skipping');
+    if (!$item.data("asin")) {
+      localLog("No asin, likely suggested item container, skipping");
       return;
     }
 
@@ -154,7 +215,7 @@
     var $title = null;
     var $price = null;
     var text = [];
-    $item.find('a[class*="text-normal"]').each(function() {
+    $item.find('a[class*="text-normal"]').each(function () {
       var $a = $(this);
       if (!$title) {
         $title = $a; // Likely the first anchor is the title
@@ -169,9 +230,9 @@
         }
       }
     });
-    text = text.join('\n');
+    text = text.join("\n");
     if (!text || !$title) {
-      localLog('Cannot find title', itemId, $item);
+      localLog("Cannot find title", itemId, $item);
       return;
     }
 
@@ -180,56 +241,58 @@
     // Links are not immediately bound so we must poll for them
     pollUntil({
       success: (url) => {
-        var a = generateReviewLinks(url).join('\n');
-        parent.append($('<div />').addClass(ID).append(a));
+        var a = generateReviewLinks(url).join("\n");
+        parent.append($("<div />").addClass(ID).append(a));
       },
-      failure: () => localLog('No title link for ', $item),
+      failure: () => localLog("No title link for ", $item),
       // prop gives us absolute url
-      test: () => $title.prop('href'),
+      test: () => $title.prop("href"),
       // 100intv * 100loop / 1000ms = 10s (random adds some jitter)
-      interval: 100 + Math.floor((Math.random() * 10) + 1),
+      interval: 100 + Math.floor(Math.random() * 10 + 1),
       loops: 100,
     });
 
     var countInPack = getCountFromTitle(text);
 
     if (!countInPack) {
-      localLog('Cannot find count', itemId, text, $item);
+      localLog("Cannot find count", itemId, text, $item);
       return;
     } else if (!$price) {
-      localLog('Cannot find price', itemId, text, $item);
+      localLog("Cannot find price", itemId, text, $item);
       return;
     }
 
     function getNumberFrom($el) {
-      return parseInt($el.text().replace(/[^0-9]/g, ''), 10);
+      return parseInt($el.text().replace(/[^0-9]/g, ""), 10);
     }
 
     var whole = getNumberFrom($price.find('[class*="price-whole"]').first());
     var cents = getNumberFrom($price.find('[class*="price-fraction"]').first());
 
     if (isNaN(whole) || isNaN(cents)) {
-      localLog('Bad price', itemId, $item);
+      localLog("Bad price", itemId, $item);
       return;
     }
 
     // Price in pennies
-    var price = cents + (whole * 100);
-    var perItem = '$' + toFixedCeil(price / countInPack / 100, 2);
-    var priceInDollars = '$' + whole + '.' + cents;
+    var price = cents + whole * 100;
+    var perItem = "$" + toFixedCeil(price / countInPack / 100, 2);
+    var priceInDollars = "$" + whole + "." + cents;
 
     // Stick the per/item price in a row below the price.
-    var $row = $price.closest('.a-row');
+    var $row = $price.closest(".a-row");
     $(`
     <div class="a-row a-spacing-none">
       <div class="a-size-small a-text-normal">
-        Estimated ${perItem} per item
+        <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
         <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
       </div>
     </div>
-    `).addClass(ID).appendTo($row);
+    `)
+      .addClass(ID)
+      .appendTo($row);
 
-    localLog('Success', itemId, $item);
+    localLog("Success", itemId, $item);
   }
 
   // Gets called on each product details page
@@ -237,58 +300,87 @@
   function newItemDetails($title) {
     function localLog() {
       var args = Array.prototype.slice.call(arguments);
-      args.unshift('newItemDetails')
-      log.apply(log, args)
+      args.unshift("newItemDetails");
+      log.apply(log, args);
     }
     localLog($title);
 
     // Add review links
-    var a = generateReviewLinks(window.location.href.split('#')[0], '40px').join('\n');
-    $title.parent().parent().append($('<div />').addClass(ID).append(a));
+    var a = generateReviewLinks(
+      window.location.href.split("#")[0],
+      "40px"
+    ).join("\n");
+    $title.parent().parent().append($("<div />").addClass(ID).append(a));
 
+    // There are many ways a product's price is displayed.
+    // When an item has options, such as colors or maybe multi-pack we have
+    // to analyze these options too. The option block is called "twister".
+    //
+    // 1. Single price -- no twister
+    // https://www.amazon.com/Gallon-White-Bucket-Lid-Container/dp/B008GMC8RM
+    //
+    // 2. Single price -- with twister with prices, but no titles (use parent's quantity)
+    // https://www.amazon.com/dp/B09L5MRR3L
+    //
+    // 3. No count, but other options have count but no prices!
+    //   Can't improve anything here unless we query the linked page (NO THANKS)
+    // https://www.amazon.com/dp/B098RX89VV
+    //
+    // 4. Single price with twister where each option has its own price and count.
+    // https://www.amazon.com/gp/product/B008KJEYLO
+    // https://www.amazon.com/Get-French-Kitchen-Dish-Sponge/dp/B0866QQW9F
+
+    var $price = null;
+    var priceInPennies = null;
     // Count
     var countInPack = getCountFromTitle($title.text());
     if (!countInPack) {
-      localLog('No count on details', $title);
-      return;
+      localLog("No count on details", $title);
+    } else {
+      do {
+        // case 1
+        $price = $(".a-price.priceToPay");
+        priceInPennies = parsePriceToPennies($price.text());
+        if (null !== priceInPennies) {
+          addEstimatedToElement(priceInPennies, countInPack, $price);
+          break;
+        }
+        // twister
+        $price = $("#snsDetailPagePrice");
+        priceInPennies = parsePriceToPennies($price.text());
+        if (null !== priceInPennies) {
+          addEstimatedToElement(priceInPennies, countInPack, $price);
+          break;
+        }
+
+        // TODO: add other case1 classes
+        localLog("failed to find case1 price", $title);
+      } while (0);
     }
 
-    // If we got this far we should be on the page, so we can query directly
-    var $price = $('#priceblock_ourprice');
-    if (!$price.length) {
-      $price = $('.apexPriceToPay');
-      if (!$price.length) {
-        localLog('Cannot find price on details', $title);
+    // Twister
+    $(".twisterSwatchWrapper").each(function () {
+      var $that = $(this);
+      var $price = $that.find(".unified-price").first();
+      if (!$price) {
+        localLog("Failed to find price for ", this);
         return;
       }
-    }
-    var textPrice = $price.text().match(/\$\d+\.\d\d/);
-    if (!textPrice) {
-      localLog('Bad textPrice on details', $title);
-      return;
-    }
-    var priceParts = textPrice[0].replace('$', '').split('.');
-    var whole = parseInt(priceParts[0], 10);
-    var cents = parseInt(priceParts[1], 10);
-
-    if (isNaN(whole) || isNaN(cents)) {
-      localLog('Bad price on details', $title);
-      return;
-    }
-
-    // Price in pennies
-    var price = cents + (whole * 100);
-    var perItem = '$' + toFixedCeil(price / countInPack / 100, 2);
-    var priceInDollars = '$' + whole + '.' + cents;
-
-    $(`
-    <div class="a-section a-spacing-small aok-align-center">
-      <span class="a-size-small">
-        Estimated ${perItem} per item
-        <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
-      </span>
-    </div>
-    `).addClass(ID).insertAfter($price);
+      var priceInPennies = parsePriceToPennies($price.text());
+      if (null == priceInPennies) {
+        localLog("Failed to parse price ", $price);
+      }
+      var optionCount = getCountFromTitle($that.text());
+      if (null == optionCount) {
+        // use parent's
+        optionCount = countInPack;
+        if (null == optionCount) {
+          localLog("Failed to get count for ", this);
+          return;
+        }
+      }
+      addEstimatedToElement(priceInPennies, optionCount, $price, 1);
+    });
   }
 
   // Suggested items are towards the bottom of a product page
@@ -296,73 +388,82 @@
   function newSuggestedItem($item) {
     function localLog() {
       var args = Array.prototype.slice.call(arguments);
-      args.unshift('newSuggestedItem')
-      log.apply(log, args)
+      args.unshift("newSuggestedItem");
+      log.apply(log, args);
     }
     localLog($item);
 
-    var $a = $item.find('a.a-link-normal.a-text-normal').first();
+    var $a = $item.find("a.a-link-normal.a-text-normal").first();
     var addTo = $a.parent().parent();
 
     // Review buttons
-    var a = generateReviewLinks($a.prop('href')).join('\n');
+    var a = generateReviewLinks($a.prop("href")).join("\n");
     addTo.append(
-      $('<div class="a-size-mini a-spacing-none a-spacing-top-small ' + ID + '_sug" />')
-        .addClass(ID).append(a)
+      $(
+        '<div class="a-size-mini a-spacing-none a-spacing-top-small ' +
+          ID +
+          '_sug" />'
+      )
+        .addClass(ID)
+        .append(a)
     );
 
     var title = $a.text().trim();
     if (!title) {
-      title = $item.find('a[href] > span').text().trim();
+      title = $item.find("a[href] > span").text().trim();
     }
     var countInPack = getCountFromTitle(title);
 
     if (!countInPack) {
-      localLog('No count', $item);
+      localLog("No count", $item);
       return;
     }
 
-    var $price = $item.find('.a-price > span').first();
-    var priceParts = $price.text().trim()
-      .replace('$', '').split('.');
+    var $price = $item.find(".a-price > span").first();
+    var priceParts = $price.text().trim().replace("$", "").split(".");
     var whole = parseInt(priceParts[0], 10);
     var cents = parseInt(priceParts[1], 10);
 
     if (isNaN(whole) || isNaN(cents)) {
-      localLog('Bad price', $title);
+      localLog("Bad price", $title);
       return;
     }
 
     // Price in pennies
-    var price = cents + (whole * 100);
-    var perItem = '$' + toFixedCeil(price / countInPack / 100, 2);
-    var priceInDollars = '$' + whole + '.' + cents;
+    var price = cents + whole * 100;
+    var perItem = "$" + toFixedCeil(price / countInPack / 100, 2);
+    var priceInDollars = "$" + whole + "." + cents;
 
-    $price.parents('.a-row').first().after(
-      `
+    $price
+      .parents(".a-row")
+      .first()
+      .after(
+        `
       <div class="a-row a-text-normal ${ID}">
-        Estimated ${perItem} per item
+        <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
         <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
       </div>
       `
-    );
+      );
   }
 
   // Called once jQuery is loaded and page is ready
   function main() {
-    log('Starting Main');
+    log("Starting Main");
 
     // This is the only way to get jQuery on the damn page.
     // We can't share a reference to it either.
     // This is something seemingly unique to FF, but should be fine in both.
     if (DEBUG && !unsafeWindow.$ && !unsafeWindow.jQuery && !unsafeWindow.$j) {
       GM_xmlhttpRequest({
-        method: 'GET',
-        url: 'https://code.jquery.com/jquery-3.3.1.slim.min.js',
-        onload: function(response) {
-          var src = 'var JQ_DO_NO_CONFLICT = typeof $ !== "undefined";\n\n'
+        method: "GET",
+        url: "https://code.jquery.com/jquery-3.3.1.slim.min.js",
+        onload: function (response) {
+          var src = 'var JQ_DO_NO_CONFLICT = typeof $ !== "undefined";\n\n';
           src += response.responseText;
-          src += '\n\n' + `
+          src +=
+            "\n\n" +
+            `
           if (JQ_DO_NO_CONFLICT) {
             window.$j = $.noConflict(true);
             console.log("%cInjected jQuery as $j", "color:blue");
@@ -371,7 +472,7 @@
           }
           `;
 
-          var script = document.createElement('script');
+          var script = document.createElement("script");
           script.textContent = src;
           document.body.append(script);
         },
@@ -390,48 +491,48 @@
 
     // Product search pages
     waitForKeyElements(
-      '.s-result-item',
-      noDupes(ID + '-newSearchPageItem', newSearchPageItem),
+      ".s-result-item",
+      noDupes(ID + "-newSearchPageItem", newSearchPageItem),
       false
     );
     // Individual product page
     waitForKeyElements(
-      '#productTitle',
-      noDupes(ID + '-newItemDetails', newItemDetails),
+      "#productTitle",
+      noDupes(ID + "-newItemDetails", newItemDetails),
       false
     );
     // Suggested items on the individual product pages
     waitForKeyElements(
       '.a-carousel-card[role="listitem"]',
-      noDupes(ID + '-newSuggestedItem', newSuggestedItem),
+      noDupes(ID + "-newSuggestedItem", newSuggestedItem),
       false
     );
   }
 
   // Wait for jQuery to be loaded
   if (window.$) {
-    log('jQuery is on the page, starting main');
+    log("jQuery is on the page, starting main");
     $(main);
   } else {
-    log('waiting for jQuery')
+    log("waiting for jQuery");
     var waitForJQ = null;
     var count = 0;
-    var clearWaitForJQ = function() {
+    var clearWaitForJQ = function () {
       if (waitForJQ) {
         window.clearInterval(waitForJQ);
         waitForJQ = null;
       }
     };
-    waitForJQ = window.setInterval(function() {
+    waitForJQ = window.setInterval(function () {
       count++;
       if (window.$ && waitForJQ) {
-        log('Found jQuery and starting main');
+        log("Found jQuery and starting main");
         clearWaitForJQ();
         $(main);
       } else if (count > 300) {
         // About 30 seconds
         clearWaitForJQ();
-        console.error(ID, 'After 30 seconds could not load jQuery');
+        console.error(ID, "After 30 seconds could not load jQuery");
       }
     }, 100);
   }
@@ -463,9 +564,17 @@
    * @param {int} _iniL Internal flag to know the original loop count and to
    *  trigger validation checks. Do not pass this manually.
    */
-  function pollUntil(successOrObj, failure, test, validator, interval, loops, _iniL) {
+  function pollUntil(
+    successOrObj,
+    failure,
+    test,
+    validator,
+    interval,
+    loops,
+    _iniL
+  ) {
     var success = successOrObj;
-    if (typeof successOrObj === 'object') {
+    if (typeof successOrObj === "object") {
       // Extract params
       success = successOrObj.success;
       failure = failure || successOrObj.failure;
@@ -475,29 +584,33 @@
       loops = loops || successOrObj.loops;
     }
     // Validate on first run only
-    if (typeof _ol !== 'number') {
+    if (typeof _ol !== "number") {
       success = success || noop;
-      if (typeof test !== 'function') {
-        throw Error('success must be a function or null');
+      if (typeof test !== "function") {
+        throw Error("success must be a function or null");
       }
       failure = failure || noop;
-      if (typeof test !== 'function') {
-        throw Error('failure must be a function or null');
+      if (typeof test !== "function") {
+        throw Error("failure must be a function or null");
       }
-      if (typeof test !== 'function') {
-        throw Error('test must be a function (how else else are we gonna test?)');
+      if (typeof test !== "function") {
+        throw Error(
+          "test must be a function (how else else are we gonna test?)"
+        );
       }
-      if (validator && typeof validator !== 'function') {
-        throw Error('validator must be a function');
+      if (validator && typeof validator !== "function") {
+        throw Error("validator must be a function");
       }
-      if (typeof interval !== 'number') {
-        throw Error('interval must be a number');
+      if (typeof interval !== "number") {
+        throw Error("interval must be a number");
       }
-      if (typeof loops !== 'number') {
-        throw Error('loops must be a number');
+      if (typeof loops !== "number") {
+        throw Error("loops must be a number");
       }
       if (loops < 1) {
-        throw Error('You cannot start pollUntil with anything less than 1 loop');
+        throw Error(
+          "You cannot start pollUntil with anything less than 1 loop"
+        );
       }
       _iniL = loops; // initial loops
     }
@@ -518,7 +631,17 @@
       return;
     }
     // Try again
-    setTimeout(pollUntil, interval, success, failure, test, validator, interval, nextLoops, _iniL);
+    setTimeout(
+      pollUntil,
+      interval,
+      success,
+      failure,
+      test,
+      validator,
+      interval,
+      nextLoops,
+      _iniL
+    );
   }
 
   function buildTitleParser(expose) {
@@ -533,18 +656,19 @@
     Ensure any groups () are non-capturing (?:...)
     */
     var qualifiers = [
-      ['', ' per \\w'],   // X per Box. X per pack.
-      ['', '[ -]*pack'],  // 2 pack or 2-pack or 2 -pack or 2pack
-      ['', '[ ,]*count'], // 4 count or 4, count or 4Count
-      ['\\w of ', ''],    // foobar of X: pack of 3, box of 12
-      ['', '[ -]*pieces'],// 2 pieces
-      ['', '[ -]*pcs'],  // 2 pcs
+      ["", " per \\w"], // X per Box. X per pack.
+      ["", "[ -]*pack"], // 2 pack or 2-pack or 2 -pack or 2pack (but not "packs")
+      ["", "[ ,]*count"], // 4 count or 4, count or 4Count
+      ["\\w+ of ", ""], // foobar of X: pack of 3, box of 12
+      ["", "[ -]*pieces"], // 2 pieces
+      ["", "[ -]*pcs"], // 2 pcs
     ];
 
-    var regExes = qualifiers.map(function(qual) {
-      var words = '(?:[a-zA-Z\\-]+(?: |-)?){1,4}'; // We allow up to 4 words
+    var regExes = qualifiers.map(function (qual) {
+      var words = "(?:[a-zA-Z\\-]+(?: |-)?){1,4}"; // We allow up to 4 words
       return new RegExp(
-        '\\b' + qual[0] + '(?:(\\d+)|(' + words + '))' + qual[1] + '\\b', 'i'
+        "\\b" + qual[0] + "(?:(\\d+)|(" + words + "))" + qual[1] + "\\b",
+        "i"
       );
     });
 
@@ -553,21 +677,46 @@
 
     // Some common slang for numbers
     var numberSlang = {
-      2: ['twin', 'double'],
-      3: ['triple'],
-      4: ['quad']
-    }
+      2: ["twin", "double"],
+      3: ["triple"],
+      4: ["quad"],
+    };
 
     var units = [
-      'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
-      'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
-      'sixteen', 'seventeen', 'eighteen', 'nineteen',
+      "zero",
+      "one",
+      "two",
+      "three",
+      "four",
+      "five",
+      "six",
+      "seven",
+      "eight",
+      "nine",
+      "ten",
+      "eleven",
+      "twelve",
+      "thirteen",
+      "fourteen",
+      "fifteen",
+      "sixteen",
+      "seventeen",
+      "eighteen",
+      "nineteen",
     ];
     var tens = [
-      '', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty',
-      'seventy', 'eighty', 'ninety',
+      "",
+      "",
+      "twenty",
+      "thirty",
+      "forty",
+      "fifty",
+      "sixty",
+      "seventy",
+      "eighty",
+      "ninety",
     ];
-    var scales = ['hundred', 'thousand', 'million', 'billion', 'trillion'];
+    var scales = ["hundred", "thousand", "million", "billion", "trillion"];
 
     /* numberWords */
     // Build numberWords which will be a map for all words to a tuple that will
@@ -575,19 +724,19 @@
     var numberWords = {
       and: [1, 0],
     };
-    units.forEach(function(word, i) {
+    units.forEach(function (word, i) {
       numberWords[word] = [1, i];
     });
-    tens.forEach(function(word, i) {
+    tens.forEach(function (word, i) {
       if (word) {
         numberWords[word] = [1, i * 10];
       }
     });
-    scales.forEach(function(word, i) {
-      numberWords[word] = [Math.pow(10, (i * 3) || 2), 0];
+    scales.forEach(function (word, i) {
+      numberWords[word] = [Math.pow(10, i * 3 || 2), 0];
     });
-    Object.keys(numberSlang).forEach(function(num) {
-      numberSlang[num].forEach(function(word) {
+    Object.keys(numberSlang).forEach(function (num) {
+      numberSlang[num].forEach(function (word) {
         numberWords[word] = [1, parseInt(num, 10)];
       });
     });
@@ -636,12 +785,12 @@
         }
       }
       result += current;
-      return (typeof result === 'number') && result > 0 ? result : null;
+      return typeof result === "number" && result > 0 ? result : null;
     }
 
     // Parse a string for a count
     function parseTitle(title) {
-      title = (title || '').trim().toLowerCase();
+      title = (title || "").trim().toLowerCase();
       for (var i = 0; i < regExes.length; i++) {
         var exp = regExes[i];
         exp.lastIndex = 0; // Reset it
@@ -676,49 +825,43 @@
     https://gist.github.com/BrockA/2625891
 */
   function waitForKeyElements(
-    selectorTxt,    /* Required: The jQuery selector string that
+    selectorTxt /* Required: The jQuery selector string that
                       specifies the desired element(s).
-                  */
-    actionFunction, /* Required: The code to run when elements are
+                  */,
+    actionFunction /* Required: The code to run when elements are
                       found. It is passed a jNode to the matched
                       element.
-                  */
-    bWaitOnce,      /* Optional: If false, will continue to scan for
+                  */,
+    bWaitOnce /* Optional: If false, will continue to scan for
                       new elements even after the first match is
                       found.
-                  */
-    iframeSelector  /* Optional: If set, identifies the iframe to
+                  */,
+    iframeSelector /* Optional: If set, identifies the iframe to
                       search.
                   */
   ) {
     var targetNodes, btargetsFound;
 
-    if (typeof iframeSelector == "undefined")
-      targetNodes = $(selectorTxt);
-    else
-      targetNodes = $(iframeSelector).contents()
-        .find(selectorTxt);
+    if (typeof iframeSelector == "undefined") targetNodes = $(selectorTxt);
+    else targetNodes = $(iframeSelector).contents().find(selectorTxt);
 
     if (targetNodes && targetNodes.length > 0) {
       btargetsFound = true;
       /*--- Found target node(s).  Go through each and act if they
           are new.
       */
-      targetNodes.each(function() {
+      targetNodes.each(function () {
         var jThis = $(this);
-        var alreadyFound = jThis.data('alreadyFound') || false;
+        var alreadyFound = jThis.data("alreadyFound") || false;
 
         if (!alreadyFound) {
           //--- Call the payload function.
           var cancelFound = actionFunction(jThis);
-          if (cancelFound)
-            btargetsFound = false;
-          else
-            jThis.data('alreadyFound', true);
+          if (cancelFound) btargetsFound = false;
+          else jThis.data("alreadyFound", true);
         }
       });
-    }
-    else {
+    } else {
       btargetsFound = false;
     }
 
@@ -731,20 +874,18 @@
     if (btargetsFound && bWaitOnce && timeControl) {
       //--- The only condition where we need to clear the timer.
       clearInterval(timeControl);
-      delete controlObj[controlKey]
-    }
-    else {
+      delete controlObj[controlKey];
+    } else {
       //--- Set a timer, if needed.
       if (!timeControl) {
-        timeControl = setInterval(function() {
-          waitForKeyElements(selectorTxt,
+        timeControl = setInterval(function () {
+          waitForKeyElements(
+            selectorTxt,
             actionFunction,
             bWaitOnce,
             iframeSelector
           );
-        },
-          300
-        );
+        }, 300);
         controlObj[controlKey] = timeControl;
       }
     }
