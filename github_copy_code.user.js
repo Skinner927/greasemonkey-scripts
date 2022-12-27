@@ -7,8 +7,11 @@
 // @author       skinner927
 // @version      1.0
 // @match        *://github.com/*
-// @connect      raw.githubusercontent.com
+// @match        *://gist.github.com/*
 // @connect      github.com
+// @connect      raw.githubusercontent.com
+// @connect      gist.github.com
+// @connect      gist.githubusercontent.com
 // @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==
@@ -82,26 +85,50 @@
   }
 
   setInterval(function startGitHubRawDownload() {
-    // "Raw" button
-    var rawUrl = document.getElementById("raw-url");
-    if (!rawUrl) {
+    // Check if our button is on the page already
+    if (document.getElementById(rawCopyId)) {
       return;
     }
-    if (document.getElementById(rawCopyId)) {
+
+    var rawButton = null;
+    var isGist = false;
+    if (0 == window.location.host.indexOf("gist.")) {
+      isGist = true;
+      // Find the  "raw" button on gists
+      var elements = document.querySelectorAll(".file-actions > a");
+      if (!elements) {
+        return;
+      }
+      for (var i = 0; i < elements.length; i++) {
+        if ("Raw" == elements[i].innerText) {
+          rawButton = elements[i];
+          break;
+        }
+      }
+    } else {
+      // "Raw" button
+      rawButton = document.getElementById("raw-url");
+    }
+
+    if (!rawButton) {
+      // No raw button found
       return;
     }
 
     /* <a class="btn-sm btn BtnGroup-item">Raw</a>*/
     var a = document.createElement("A");
     a.id = rawCopyId;
-    a.classList.add("btn-sm", "btn", "BtnGroup-item");
+    a.classList.add("btn-sm", "btn");
+    if (!isGist) {
+      a.classList.add("BtnGroup-item");
+    }
     a.style.position = "relative";
     // https://github.com/SamHerbert/SVG-Loaders
     a.innerHTML =
       'Copy<svg stroke="currentColor" style="position: absolute; top: 0; right: 0; display: none;" width="16" height="16" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke-width="2"><circle cx="22" cy="22" r="1"><animate attributeName="r" begin="0s" calcMode="spline" dur="1.8s" keySplines="0.165, 0.84, 0.44, 1" keyTimes="0; 1" repeatCount="indefinite" values="1; 20"/><animate attributeName="stroke-opacity" begin="0s" calcMode="spline" dur="1.8s" keySplines="0.3, 0.61, 0.355, 1" keyTimes="0; 1" repeatCount="indefinite" values="1; 0"/></circle><circle cx="22" cy="22" r="1"><animate attributeName="r" begin="-0.9s" calcMode="spline" dur="1.8s" keySplines="0.165, 0.84, 0.44, 1" keyTimes="0; 1" repeatCount="indefinite" values="1; 20"/><animate attributeName="stroke-opacity" begin="-0.9s" calcMode="spline" dur="1.8s" keySplines="0.3, 0.61, 0.355, 1" keyTimes="0; 1" repeatCount="indefinite" values="1; 0"/></circle></g></svg>';
 
-    a.addEventListener("click", copyClickedHandler(rawUrl.href + ""));
+    a.addEventListener("click", copyClickedHandler(rawButton.href + ""));
 
-    rawUrl.parentElement.appendChild(a);
+    rawButton.parentElement.appendChild(a);
   }, 250);
 })();
