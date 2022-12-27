@@ -17,44 +17,41 @@
 // ==/UserScript==
 
 (function () {
-  var state = {};
-  var rawCopyId = "raw-copy";
+  var rawCopyClass = "raw-copy-button";
   var disabled = "disabled";
 
   var greenBg = "#a8f1c6";
   var redBg = "#f6a7a3";
 
-  function resetCopyBg() {
-    if (state.bgTimeout) {
-      window.clearTimeout(state.bgTimeout);
-      state.bgTimeout = null;
-    }
-    var a = document.getElementById(rawCopyId);
-    if (a) {
-      a.style.background = "";
-      a.classList.remove(disabled);
-    }
-  }
-
-  function copyDone(success) {
-    resetCopyBg();
-
-    var a = document.getElementById(rawCopyId);
-    if (!a) {
+  function resetCopyBg(element) {
+    if (!element) {
       return;
     }
-    var svg = a.querySelector("svg");
+    if (element.bgTimeout) {
+      window.clearTimeout(element.bgTimeout);
+      element.bgTimeout = null;
+    }
+    var svg = button.querySelector("svg");
     if (svg) {
       svg.style.display = "none";
     }
+    element.style.background = "";
+    element.classList.remove(disabled);
+  }
 
-    a.style.background = success ? greenBg : redBg;
-    state.bgTimeout = window.setTimeout(resetCopyBg, 1000);
+  function copyDone(success, button) {
+    if (!button) {
+      return;
+    }
+    resetCopyBg(button);
+
+    button.style.background = success ? greenBg : redBg;
+    button.bgTimeout = window.setTimeout(resetCopyBg.bind(null, button), 1000);
   }
 
   function copyClickedHandler(url) {
     return function copyClickedAction(e) {
-      if (!e || !e.target || e.target.id !== rawCopyId) {
+      if (!e || !e.target || !e.target.classList.contains(rawCopyClass)) {
         return;
       }
       var svg = e.target.querySelector("svg");
@@ -62,7 +59,7 @@
         return;
       }
 
-      resetCopyBg();
+      resetCopyBg(e.target);
       e.preventDefault();
       if (e.target.classList.contains(disabled)) {
         return;
@@ -74,51 +71,19 @@
       GM_xmlhttpRequest({
         method: "GET",
         url: url,
-        //responseType: 'blob',
         onload: function copyOnLoad(result) {
           GM_setClipboard(result.responseText, "text/plain");
-          copyDone(true);
+          copyDone(true, e.target);
         },
-        onerror: copyDone.bind(null, false),
+        onerror: copyDone.bind(null, false, e.target),
       });
     };
   }
 
-  setInterval(function startGitHubRawDownload() {
-    // Check if our button is on the page already
-    if (document.getElementById(rawCopyId)) {
-      return;
-    }
-
-    var rawButton = null;
-    var isGist = false;
-    if (0 == window.location.host.indexOf("gist.")) {
-      isGist = true;
-      // Find the  "raw" button on gists
-      var elements = document.querySelectorAll(".file-actions > a");
-      if (!elements) {
-        return;
-      }
-      for (var i = 0; i < elements.length; i++) {
-        if ("Raw" == elements[i].innerText) {
-          rawButton = elements[i];
-          break;
-        }
-      }
-    } else {
-      // "Raw" button
-      rawButton = document.getElementById("raw-url");
-    }
-
-    if (!rawButton) {
-      // No raw button found
-      return;
-    }
-
+  function addCopyButton(rawButton, isGist) {
     /* <a class="btn-sm btn BtnGroup-item">Raw</a>*/
     var a = document.createElement("A");
-    a.id = rawCopyId;
-    a.classList.add("btn-sm", "btn");
+    a.classList.add("btn-sm", "btn", rawCopyClass);
     if (!isGist) {
       a.classList.add("BtnGroup-item");
     }
@@ -130,5 +95,29 @@
     a.addEventListener("click", copyClickedHandler(rawButton.href + ""));
 
     rawButton.parentElement.appendChild(a);
+  }
+
+  setInterval(function startGitHubRawDownload() {
+    // Check if our button is on the page already
+    if (document.querySelector("." + rawCopyClass)) {
+      return;
+    }
+
+    if (0 == window.location.host.indexOf("gist.")) {
+      // Find the  "raw" button on gists
+      var elements = document.querySelectorAll(".file-actions > a");
+      if (!elements) {
+        return;
+      }
+      for (var i = 0; i < elements.length; i++) {
+        if ("Raw" == elements[i].innerText) {
+          addCopyButton(elements[i], true);
+        }
+      }
+    } else {
+      // "Raw" button
+      var rawButton = document.getElementById("raw-url");
+      addCopyButton(rawButton, false);
+    }
   }, 250);
 })();
