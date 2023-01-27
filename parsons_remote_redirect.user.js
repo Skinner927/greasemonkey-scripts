@@ -6,9 +6,9 @@
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/parsons_remote_redirect.user.js
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=parsons.com
 // @author       skinner927
-// @version      1.0
+// @version      1.1
 // @match        *://*.parsons.com/*
-// @grant        none
+// @grant        GM_registerMenuCommand
 // ==/UserScript==
 
 (function() {
@@ -22,6 +22,10 @@
 
         window.location = "https://remote.parsons.us/" + protocol + "/" + remainder;
     }
+
+    GM_registerMenuCommand("Redirect to remote.parsons.us", function() {
+        parsonsRemote();
+    }, "r");
 
     function everySecond(){
         // Export
