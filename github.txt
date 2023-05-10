@@ -1,1 +1,8 @@
-https://github.com/Mottie/GitHub-userscripts/blob/master/github-title-notification.user.js
+https://raw.githubusercontent.com/Mottie/Github-userscripts/master/github-code-show-whitespace.user.js
+https://raw.githubusercontent.com/Mottie/Github-userscripts/master/github-download-zip.user.js
+https://raw.githubusercontent.com/Mottie/GitHub-userscripts/master/github-html-preview.user.js
+https://raw.githubusercontent.com/Mottie/GitHub-userscripts/master/github-image-preview.user.js
+https://raw.githubusercontent.com/Mottie/Github-userscripts/master/github-issue-counts.user.js
+https://raw.githubusercontent.com/Mottie/GitHub-userscripts/master/github-mentioned-links.user.js
+https://raw.githubusercontent.com/Mottie/Github-userscripts/master/github-search-autocomplete.user.js
+https://raw.githubusercontent.com/Mottie/Github-userscripts/master/github-title-notification.user.js
