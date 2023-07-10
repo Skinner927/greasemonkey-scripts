@@ -18,3 +18,4 @@ jobs:
         run: npm install -g chalk@4.x
       - run: node test_amazon_get_count_from_title.js
       - run: node test_amazon_pollUntil.js
+      - run: node test_amazon_parse_price.js

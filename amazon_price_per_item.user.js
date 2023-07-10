@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         Amazon price per item
+// @description  Show how much each item costs per bundle/pack and how much alternatives (colors/options) cost.
 // @namespace    https://github.com/Skinner927/greasemonkey-scripts
 // @updateURL    https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
+// @downloadURL  https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.13
+// @version      1.14
 // @match        *://*.amazon.com/*
 // @run-at       document-start
 // @grant        unsafeWindow
@@ -13,7 +15,12 @@
 // @require      https://code.jquery.com/jquery-3.3.1.slim.min.js
 // ==/UserScript==
 
+/* TODO/BUGFIX
+  - https://www.amazon.com/dp/B098RX89VV needs to update color prices when size changes.
+*/
+
 /* Changelog *
+ * 1.14 - Fetch prices of product Twister color/variation/options.
  * 1.13 - Greatly improve estimates on "twister" product pages (multiple options).
  * 1.12 - Amazon has many sub-paths, so now match everything.
  * 1.11 - Fix item detail price selector.
@@ -31,6 +38,7 @@
  * 1.0  - Initial release.
  */
 
+/* global module:writable, $:readonly */
 // Hand rolled to work with node require and run in the browser
 (function (factory) {
   if (typeof exports === "object" && typeof module !== "undefined") {
@@ -46,6 +54,7 @@
     return {
       buildTitleParser: buildTitleParser,
       pollUntil: pollUntil,
+      parsePrice: parsePrice,
     };
   }
   // If we're not returning exports, run the gm script
@@ -133,7 +142,13 @@
 
   var searchPageItemCounter = 0;
 
-  function addEstimatedToElement(priceInPennies, itemCount, $sibling, style) {
+  function addEstimatedToElement(
+    priceInPennies,
+    itemCount,
+    $sibling,
+    style,
+    klass
+  ) {
     if (!priceInPennies || !itemCount || !$sibling) {
       return;
     }
@@ -161,34 +176,118 @@
       `);
     }
 
-    $note.addClass(ID).insertAfter($sibling);
+    $note.addClass(klass || ID).insertAfter($sibling);
   }
 
-  function parsePriceToPennies(priceText) {
-    if (!priceText) {
+  /**
+   * @typedef {Object} PriceTuple
+   * @property {string} price String representation of price with $ prefix
+   * @property {Number} dollars
+   * @property {Number} cents
+   * @property {Number} pennies (dollars * 100) + pennies
+   */
+
+  /**
+   * Convert price string to a tuple of
+   *   [ Full price string with $, Dollars, Cents, TotalPennies]
+   *
+   * Takes:
+   *  $1,234.99 = $1,234.99
+   *  $.50  = $0.50
+   *  $0.22  = $0.22
+   *  $1 = $1.00
+   *  bacon $ 123 . 99 potato
+   *  123
+   *  123 99
+   *  123<sup>99</sup>
+   *
+   *
+   * @param {string} price
+   * @returns {PriceTuple|null} null on error
+   */
+  function parsePrice(price) {
+    if (!price) {
       return null;
     }
-    priceText = priceText.trim().replace("$", " ");
+    price = price.trim();
 
     var whole = NaN;
     var cents = NaN;
-    if (priceText.indexOf(".") !== -1) {
-      // Price is likely formatted like "11.22"
-      var priceParts = priceText.split(".");
-      whole = parseInt(priceParts[0], 10);
-      cents = parseInt(priceParts[1], 10);
+    var match = price.match(/\$ *([0-9,]*) *\. *(\d*)/);
+    if (!match) {
+      // Try without dollar sign
+      match = price.match(/([0-9,]*) *\. *(\d*)/);
+    }
+    if (match && match.length === 3) {
+      var m1 = match[1].replace(/,/g, "").trim();
+      var m2 = match[2].trim();
+      whole = m1 ? parseInt(m1, 10) : 0;
+      cents = m2.trim() ? parseInt(m2, 10) : 0;
     } else {
+      if (!parsePrice.CHAR_0) {
+        // init
+        parsePrice.CHAR_0 = "0".charCodeAt(0);
+        parsePrice.CHAR_9 = "9".charCodeAt(0);
+      }
       // No decimal means we might be dealing with something like
       // `44<sup>99</sup>`
-      whole = parseInt(priceText.slice(0, -2), 10);
-      cents = parseInt(priceText.slice(-2), 10);
+      var wholeStr = "";
+      var centsStr = "";
+      var state = 0;
+      for (var i = 0; i < price.length; i++) {
+        var c = price.charCodeAt(i);
+        if (c < parsePrice.CHAR_0 || c > parsePrice.CHAR_9) {
+          // Invalid character
+          if (1 === state) {
+            if ("," === price[i]) {
+              // Ignore commas
+              continue;
+            }
+            // Advance to cents
+            state++;
+          } else if (state >= 3) {
+            // Done with cents, we're done with the loop
+            break;
+          }
+          continue;
+        }
+        // valid char
+        switch (state) {
+          case 0: // pre-dollars
+            state++; // fall-through
+          case 1: // dollars
+            wholeStr += price[i];
+            break;
+          case 2: // post-dollars, pre-cents
+            state++; // fall-through
+          case 3: // cents
+            centsStr += price[i];
+            break;
+          default:
+            throw new Error("Unknown state " + state);
+        }
+      }
+      if (wholeStr || centsStr) {
+        whole = wholeStr ? parseInt(wholeStr, 10) : 0;
+        cents = centsStr ? parseInt(centsStr, 10) : 0;
+      }
     }
 
     if (isNaN(whole) || isNaN(cents)) {
       return null;
     }
-    // Price in pennies
-    return cents + whole * 100;
+
+    return {
+      dollars: whole,
+      cents: cents,
+      pennies: cents + whole * 100,
+      price: `\$${whole.toLocaleString("en-US")}.${cents}`,
+    };
+  }
+
+  function parsePriceToPennies(priceText) {
+    var result = parsePrice(priceText);
+    return result ? result.pennies : null;
   }
 
   // Gets called for each search page product item
@@ -295,8 +394,24 @@
     localLog("Success", itemId, $item);
   }
 
+  // In order of preference
+  var DETAILS_PAGE_PRICE_SELECTORS = [
+    ".a-price.priceToPay .a-offscreen",
+    ".a-price.apexPriceToPay .a-offscreen",
+    ".a-price.priceToPay",
+    ".a-price.apexPriceToPay",
+    // Add centerCol because right-col can have subscription prices
+    "#centerCol .a-price .a-offscreen",
+    // twister
+    "#snsDetailPagePrice",
+    ".a-price .a-offscreen",
+  ];
+  var DETAILS_PAGE_PRODUCT_TITLE_SELECTOR = "#productTitle";
+  var NEW_ITEM_DETAILS_CLASS = ID + "-newItemDetails";
+  var newItemDetailsAbort = new AbortController();
   // Gets called on each product details page
   // https://www.amazon.com/Dust-Off-Compressed-Gas-Duster-Pack/dp/B01MQFCYW0
+  // https://www.amazon.com/dp/B01CQOV3YO
   function newItemDetails($title) {
     function localLog() {
       var args = Array.prototype.slice.call(arguments);
@@ -305,82 +420,265 @@
     }
     localLog($title);
 
+    // Abort any previous fetches and create a new controller
+    newItemDetailsAbort.abort();
+    newItemDetailsAbort = new AbortController();
+
     // Add review links
     var a = generateReviewLinks(
       window.location.href.split("#")[0],
       "40px"
     ).join("\n");
-    $title.parent().parent().append($("<div />").addClass(ID).append(a));
+
+    $title
+      .parent()
+      .parent()
+      .append($("<div />").addClass(NEW_ITEM_DETAILS_CLASS).append(a));
 
     // There are many ways a product's price is displayed.
     // When an item has options, such as colors or maybe multi-pack we have
-    // to analyze these options too. The option block is called "twister".
+    // to analyze these options too. The options/colors/variance block is called
+    // "twister".
     //
     // 1. Single price -- no twister
     // https://www.amazon.com/Gallon-White-Bucket-Lid-Container/dp/B008GMC8RM
     //
     // 2. Single price -- with twister with prices, but no titles (use parent's quantity)
     // https://www.amazon.com/dp/B09L5MRR3L
+    // https://www.amazon.com/dp/B016XTADG2 (no quantity just prices)
     //
     // 3. No count, but other options have count but no prices!
-    //   Can't improve anything here unless we query the linked page (NO THANKS)
-    // https://www.amazon.com/dp/B098RX89VV
+    //   We need to query the linked product to get its price :D
+    // https://www.amazon.com/dp/B098RX89VV (Double decker: color & size)
+    // https://www.amazon.com/dp/B01CRPV4UK
     //
     // 4. Single price with twister where each option has its own price and count.
     // https://www.amazon.com/gp/product/B008KJEYLO
     // https://www.amazon.com/Get-French-Kitchen-Dish-Sponge/dp/B0866QQW9F
+    //
 
-    var $price = null;
-    var priceInPennies = null;
     // Count
     var countInPack = getCountFromTitle($title.text());
     if (!countInPack) {
       localLog("No count on details", $title);
     } else {
-      do {
-        // case 1
-        $price = $(".a-price.priceToPay");
-        priceInPennies = parsePriceToPennies($price.text());
-        if (null !== priceInPennies) {
-          addEstimatedToElement(priceInPennies, countInPack, $price);
-          break;
+      var foundPrice = DETAILS_PAGE_PRICE_SELECTORS.some(function (selector) {
+        var $price = $(selector);
+        if (!$price.is(":visible")) {
+          return false;
         }
-        // twister
-        $price = $("#snsDetailPagePrice");
-        priceInPennies = parsePriceToPennies($price.text());
+        var priceInPennies = parsePriceToPennies($price.text());
         if (null !== priceInPennies) {
-          addEstimatedToElement(priceInPennies, countInPack, $price);
-          break;
+          addEstimatedToElement(
+            priceInPennies,
+            countInPack,
+            $price,
+            0,
+            NEW_ITEM_DETAILS_CLASS
+          );
+          return true;
         }
-
-        // TODO: add other case1 classes
-        localLog("failed to find case1 price", $title);
-      } while (0);
+        return false;
+      });
+      if (!foundPrice) {
+        localLog("failed to find price!", $title);
+      }
     }
 
     // Twister
-    $(".twisterSwatchWrapper").each(function () {
-      var $that = $(this);
-      var $price = $that.find(".unified-price").first();
-      if (!$price) {
-        localLog("Failed to find price for ", this);
+    $("#twisterContainer li").each(function () {
+      var $li = $(this);
+      if ($li.hasClass(NEW_ITEM_DETAILS_CLASS)) {
         return;
       }
-      var priceInPennies = parsePriceToPennies($price.text());
-      if (null == priceInPennies) {
-        localLog("Failed to parse price ", $price);
+      $li.addClass(NEW_ITEM_DETAILS_CLASS);
+
+      var $button = $li.find("button");
+      if (!$button.length) {
+        localLog("Failed to find button", $li);
+        return;
       }
-      var optionCount = getCountFromTitle($that.text());
-      if (null == optionCount) {
-        // use parent's
-        optionCount = countInPack;
-        if (null == optionCount) {
-          localLog("Failed to get count for ", this);
+
+      // Try to figure out where we add our augments to.
+      // There's many different twister buttons.
+      var $addElementsTo = $button.find(".twisterSwatchWrapper");
+      if (!$addElementsTo.length) {
+        var $innerImg = $button.find("img");
+        if ($innerImg.length) {
+          // Float the image left because these type of twisters have no style.
+          // https://www.amazon.com/dp/B01CRPV4UK
+          $innerImg.css("float", "left");
+          $addElementsTo = $innerImg.parent();
+        } else {
+          var $innerDiv = $button.children("div");
+          if ($innerDiv.length) {
+            $addElementsTo = $innerDiv;
+          }
+        }
+      }
+
+      // Check if this twister item has a price
+      var $price = $button.find(".unified-price").first();
+      if ($price.length) {
+        $addElementsTo = $price.parent().parent();
+      }
+      // Final sanity fallback to button
+      if (!$addElementsTo || !$addElementsTo.length) {
+        $addElementsTo = $button;
+      }
+
+      var theParsedPrice = parsePrice($price.text());
+      // Let's see if it has a title to parse a count out of
+      var optionCount = getCountFromTitle($button.text());
+
+      if (null !== theParsedPrice) {
+        if (null !== optionCount) {
+          // We have all the data we need
+          addEstimatedToElement(
+            theParsedPrice.pennies,
+            optionCount,
+            $addElementsTo,
+            1,
+            NEW_ITEM_DETAILS_CLASS
+          );
+          // Return because we don't need to query the sub-page.
+          return;
+        }
+        if (null === countInPack) {
+          // This page doesn't have a count so it's unlikely any of the
+          // twister items to either. Price is already there. Not worth
+          // doing a fetch to get Prime status.
           return;
         }
       }
-      addEstimatedToElement(priceInPennies, optionCount, $price, 1);
+
+      // Fetch the other product's page and scrape as much as we can :D
+
+      var url = null;
+      // Even though dpUrl has the URL we don't want to use it becuase it has possible tracking flags
+      var asin = $li.data("defaultasin") || $li.data("csaCItemId");
+      if (asin) {
+        url = "/dp/" + asin;
+      } else {
+        url = $li.data("dpUrl");
+        if (!url) {
+          localLog("Failed to get URL/ASIN for twister li", $li);
+          return;
+        }
+      }
+
+      // Shove a ... div below the button of this option to signal prices are
+      // loading. It will be updated later.
+      var $loading = $(
+        `<div class="${NEW_ITEM_DETAILS_CLASS}" style="${STYLE_ESTIMATED} text-align:center; line-height:1em;">...</div>`
+      ).appendTo($addElementsTo);
+
+      // Fetch the products product page and parse the price out.
+      fetch(url, { signal: newItemDetailsAbort.signal })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error("Failed to fetch " + url);
+          }
+          return res.text();
+        })
+        .then((html) => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+
+          // Only update price if it wasn't found
+          var foundPrice = null;
+          var $primeHtml = null;
+          if (null === theParsedPrice) {
+            foundPrice = _findPagePriceInHtml(htmlDoc);
+            $primeHtml = $(
+              '<span class="a-icon-prime-with-text a-color-secondary aok-align-center a-size-small"></span>'
+            );
+            if (null !== foundPrice) {
+              var featureHtml =
+                $("#priceBadging_feature_div").first().html() || "";
+              if (-1 !== featureHtml.indexOf("icon-prime")) {
+                // Prime icon
+                $primeHtml.append(
+                  $(
+                    '<i class="a-icon a-icon-prime a-icon-mini" role="presentation"></i>'
+                  )
+                );
+                // One-Day, Two-Day, Same-Day
+                var primeCtx = $("#priceBadging_feature_div")
+                  .first()
+                  .text()
+                  .match(/\w+-[Dd]ay/);
+                if (primeCtx) {
+                  $primeHtml.append(
+                    $(
+                      // Leave the trailing whitespace!
+                      '<span style="white-space:nowrap;"> ' +
+                        primeCtx[0] +
+                        "</span>"
+                    )
+                  );
+                }
+              }
+            } else {
+              if (null === theParsedPrice) {
+                // Throw because if we don't have price we can't do anything
+                throw new Error("Failed to parse price");
+              }
+              foundPrice = theParsedPrice;
+            }
+          }
+
+          // Scrape the title too in case this twister item has a count
+          // and the parent does not.
+          var variantTitle = htmlDoc.querySelector(
+            DETAILS_PAGE_PRODUCT_TITLE_SELECTOR
+          );
+          var variantCount = null;
+          if (variantTitle) {
+            variantCount = getCountFromTitle(variantTitle.textContent);
+          }
+
+          // Display results
+          if (null !== foundPrice) {
+            if (null !== count) {
+              addEstimatedToElement(
+                foundPrice.pennies,
+                count,
+                $addElementsTo,
+                1,
+                NEW_ITEM_DETAILS_CLASS
+              );
+            }
+            $loading.text("");
+            $loading.append($("<div>" + foundPrice.price + "</div>"));
+            $loading.append($primeHtml);
+          } else {
+            $loading.remove();
+          }
+        })
+        .catch((e) => {
+          $loading.text("!");
+          $loading.css("font-weight", "bold");
+          $loading.css("color", "red");
+          localLog("twister fetch error: " + url, $li, e);
+        });
     });
+  }
+
+  function _findPagePriceInHtml(htmlDoc) {
+    for (var s = 0; s < DETAILS_PAGE_PRICE_SELECTORS.length; s++) {
+      var items = htmlDoc.querySelectorAll(DETAILS_PAGE_PRICE_SELECTORS[s]);
+      if (!items) {
+        continue;
+      }
+      for (var i = 0; i < items.length; i++) {
+        var parsed = parsePrice(items[i].textContent);
+        if (parsed) {
+          return parsed;
+        }
+      }
+    }
+    return null;
   }
 
   // Suggested items are towards the bottom of a product page
@@ -415,24 +713,19 @@
     var countInPack = getCountFromTitle(title);
 
     if (!countInPack) {
-      localLog("No count", $item);
+      //localLog("No count", $item);
       return;
     }
 
     var $price = $item.find(".a-price > span").first();
-    var priceParts = $price.text().trim().replace("$", "").split(".");
-    var whole = parseInt(priceParts[0], 10);
-    var cents = parseInt(priceParts[1], 10);
-
-    if (isNaN(whole) || isNaN(cents)) {
-      localLog("Bad price", $title);
+    var parsed = parsePrice($price.text().trim());
+    if (!parsed) {
+      localLog("Bad price", title, "item:", $item, "<a>:", $a);
       return;
     }
 
-    // Price in pennies
-    var price = cents + whole * 100;
-    var perItem = "$" + toFixedCeil(price / countInPack / 100, 2);
-    var priceInDollars = "$" + whole + "." + cents;
+    var perItem = "$" + toFixedCeil(parsed.pennies / countInPack / 100, 2);
+    var priceInDollars = parsed.price;
 
     $price
       .parents(".a-row")
@@ -497,7 +790,7 @@
     );
     // Individual product page
     waitForKeyElements(
-      "#productTitle",
+      DETAILS_PAGE_PRODUCT_TITLE_SELECTOR,
       noDupes(ID + "-newItemDetails", newItemDetails),
       false
     );
