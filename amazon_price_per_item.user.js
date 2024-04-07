@@ -6,7 +6,7 @@
 // @downloadURL  https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.14
+// @version      1.15
 // @match        *://*.amazon.com/*
 // @run-at       document-start
 // @grant        unsafeWindow
@@ -19,7 +19,8 @@
   - https://www.amazon.com/dp/B098RX89VV needs to update color prices when size changes.
 */
 
-/* Changelog *
+/* Changelog
+ * 1.15 - Add "/pack" support.
  * 1.14 - Fetch prices of product Twister color/variation/options.
  * 1.13 - Greatly improve estimates on "twister" product pages (multiple options).
  * 1.12 - Amazon has many sub-paths, so now match everything.
@@ -950,7 +951,7 @@
     */
     var qualifiers = [
       ["", " per \\w"], // X per Box. X per pack.
-      ["", "[ -]*pack"], // 2 pack or 2-pack or 2 -pack or 2pack (but not "packs")
+      ["", "[ /-]*pack"], // 2 pack or 2-pack or 2 -pack or 2pack (but not "packs")
       ["", "[ ,]*count"], // 4 count or 4, count or 4Count
       ["\\w+ of ", ""], // foobar of X: pack of 3, box of 12
       ["", "[ -]*pieces"], // 2 pieces
