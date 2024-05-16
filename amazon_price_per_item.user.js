@@ -6,8 +6,10 @@
 // @downloadURL  https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.15
+// @author       LudooOdOa
+// @version      1.20
 // @match        *://*.amazon.com/*
+// @match        *://*.amazon.fr/*
 // @run-at       document-start
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
@@ -20,6 +22,7 @@
 */
 
 /* Changelog
+ * 1.20 - i18n support.
  * 1.15 - Add "/pack" support.
  * 1.14 - Fetch prices of product Twister color/variation/options.
  * 1.13 - Greatly improve estimates on "twister" product pages (multiple options).
@@ -58,6 +61,7 @@
       parsePrice: parsePrice,
     };
   }
+
   // If we're not returning exports, run the gm script
   var ID = "gm_amazon_price_per_item";
   var DEBUG = false;
@@ -65,6 +69,28 @@
     DEBUG = true;
   }
   var STYLE_ESTIMATED = "color:blue;";
+  //var CURRENCY_SIGN = "$";
+  var CURRENCY_MODE='USD'
+
+  var LOCALE=document.documentElement.lang //"en-US"
+  let segments = LOCALE.split('-'), country=segments[0], region=segments[1];
+  //var DECIMAL_SEPARATOR="."
+  var DECIMAL_SEPARATOR= new Intl.NumberFormat(LOCALE).format(1.1).replaceAll('1','')
+  //var THOUSANDS_SEPARATOR=",";
+  var THOUSANDS_SEPARATOR=new Intl.NumberFormat(LOCALE).format(1111).replaceAll('1','')
+  let currencies = {
+    fr: 'EUR',
+    en: 'USD'
+  }
+  CURRENCY_MODE=currencies[country]||'USD'
+//   if (isEuro()){
+//       THOUSANDS_SEPARATOR=" "
+//       DECIMAL_SEPARATOR=","
+//   }
+  let formatter = new Intl.NumberFormat(LOCALE, {
+        style: 'currency',
+        currency: CURRENCY_MODE
+  });
   // We blast this simply so we can get a context if we need to debug
   console.log(ID, "Starting", window.location);
 
@@ -154,8 +180,10 @@
       return;
     }
     // Price in pennies
-    var perItem = "$" + toFixedCeil(priceInPennies / itemCount / 100, 2);
-    var priceInDollars = "$" + toFixedCeil(priceInPennies / 100, 2);
+    //var perItem = CURRENCY_SIGN + toFixedCeil(priceInPennies / itemCount / 100, 2);
+    var perItem = formatter.format(toFixedCeil(priceInPennies / itemCount / 100, 2));
+    //var priceInDollars = CURRENCY_SIGN + toFixedCeil(priceInPennies / 100, 2);
+    var priceInDollars = formatter.format( toFixedCeil(priceInPennies / 100, 2) );
 
     var $note = null;
     if (1 == style) {
@@ -211,6 +239,9 @@
       return null;
     }
     price = price.trim();
+    if (!price) {
+      return null;
+    }
 
     var whole = NaN;
     var cents = NaN;
@@ -240,7 +271,7 @@
         if (c < parsePrice.CHAR_0 || c > parsePrice.CHAR_9) {
           // Invalid character
           if (1 === state) {
-            if ("," === price[i]) {
+            if (THOUSANDS_SEPARATOR === price[i]) {
               // Ignore commas
               continue;
             }
@@ -277,12 +308,12 @@
     if (isNaN(whole) || isNaN(cents)) {
       return null;
     }
-
+    let pennies = cents + whole*100
     return {
       dollars: whole,
       cents: cents,
-      pennies: cents + whole * 100,
-      price: `\$${whole.toLocaleString("en-US")}.${cents}`,
+      pennies: pennies,
+      price: formatter.format(pennies/100),
     };
   }
 
@@ -376,8 +407,10 @@
 
     // Price in pennies
     var price = cents + whole * 100;
-    var perItem = "$" + toFixedCeil(price / countInPack / 100, 2);
-    var priceInDollars = "$" + whole + "." + cents;
+    //var perItem = CURRENCY_SIGN + toFixedCeil(price / countInPack / 100, 2);
+    var perItem = formatter.format(toFixedCeil(price / countInPack / 100, 2))
+    //var priceInDollars = CURRENCY_SIGN + whole + DECIMAL_SEPARATOR+ cents;
+    var priceInDollars = formatter.format(price/100)
 
     // Stick the per/item price in a row below the price.
     var $row = $price.closest(".a-row");
@@ -568,6 +601,8 @@
         }
       }
 
+      $addElementsTo.css({'display':'flex','flex-direction':'column'});
+
       // Shove a ... div below the button of this option to signal prices are
       // loading. It will be updated later.
       var $loading = $(
@@ -651,7 +686,7 @@
               );
             }
             $loading.text("");
-            $loading.append($("<div>" + foundPrice.price + "</div>"));
+            $loading.append($("<div class='my-price'>" + foundPrice.price + "</div>"));
             $loading.append($primeHtml);
           } else {
             $loading.remove();
@@ -725,7 +760,8 @@
       return;
     }
 
-    var perItem = "$" + toFixedCeil(parsed.pennies / countInPack / 100, 2);
+    //var perItem = CURRENCY_SIGN + toFixedCeil(parsed.pennies / countInPack / 100, 2);
+    var perItem = formatter.format(toFixedCeil(parsed.pennies / countInPack / 100, 2))
     var priceInDollars = parsed.price;
 
     $price
@@ -1011,6 +1047,46 @@
       "ninety",
     ];
     var scales = ["hundred", "thousand", "million", "billion", "trillion"];
+
+     if (country ==='fr'){
+
+         // TODO : use const { ToWords } = require('to-words'); for all languages
+         units = [
+             "zero",
+             "un",
+             "deux",
+             "trois",
+             "quatre",
+             "cing",
+             "six",
+             "sept",
+             "huit",
+             "neuf",
+             "dix",
+             "onze",
+             "douze",
+             "treize",
+             "quatorze",
+             "quinze",
+             "seize",
+             "dix-sept",
+             "dix-huit",
+             "dix-neuf",
+         ];
+         tens = [
+             "",
+             "",
+             "vingt",
+             "trente",
+             "quarante",
+             "cinquantte",
+             "soixante",
+             "soixante-dix",
+             "quatre-vingt",
+             "quatre-vingt-dix",
+         ];
+         scales = ["centaine", "millier", "million", "milliard", "trilliard"];
+     }
 
     /* numberWords */
     // Build numberWords which will be a map for all words to a tuple that will
