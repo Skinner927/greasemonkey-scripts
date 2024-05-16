@@ -42,6 +42,12 @@
  * 1.0  - Initial release.
  */
 
+/*
+i18n fr samples:
+- https://www.amazon.fr/Amazon-Basics-Piles-Rechargeables-Pr%C3%A9-Charg%C3%A9es/dp/B007B9NXAC/ref=sr_1_5_pp
+- https://www.amazon.fr/Piles-Auditives-Rayovac-Appareil-Auditif/dp/B0CZS7X64G/ref=asc_df_B0C46K6SM7/
+*/
+
 /* global module:writable, $:readonly */
 // Hand rolled to work with node require and run in the browser
 (function (factory) {
@@ -83,10 +89,20 @@
     en: 'USD'
   }
   CURRENCY_MODE=currencies[country]||'USD'
-//   if (isEuro()){
-//       THOUSANDS_SEPARATOR=" "
-//       DECIMAL_SEPARATOR=","
-//   }
+
+  let i18n_strings = {
+    fr: {
+        item: 'unité',
+        estimated: function(perItem){ return `Environ ${perItem} par unité`}
+    },
+    en: {
+        item: 'item',
+        estimated: function(perItem){ return `Estimated ${perItem} per item`}
+    }
+  };
+  let i18n=i18n_strings[country]
+  let UNIT_WORD = i18n.item;
+
   let formatter = new Intl.NumberFormat(LOCALE, {
         style: 'currency',
         currency: CURRENCY_MODE
@@ -180,9 +196,7 @@
       return;
     }
     // Price in pennies
-    //var perItem = CURRENCY_SIGN + toFixedCeil(priceInPennies / itemCount / 100, 2);
     var perItem = formatter.format(toFixedCeil(priceInPennies / itemCount / 100, 2));
-    //var priceInDollars = CURRENCY_SIGN + toFixedCeil(priceInPennies / 100, 2);
     var priceInDollars = formatter.format( toFixedCeil(priceInPennies / 100, 2) );
 
     var $note = null;
@@ -190,7 +204,7 @@
       $note = $(`
         <div class="a-section a-spacing-small aok-align-center">
           <span class="a-size-small" title="${itemCount} @ ${priceInDollars}" style="${STYLE_ESTIMATED}">
-            ${perItem}/item
+            ${perItem}/${i18n.item}
           </span>
         </div>
       `);
@@ -198,7 +212,7 @@
       $note = $(`
         <div class="a-section a-spacing-small aok-align-center">
           <span class="a-size-small">
-            <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
+            <span style="${STYLE_ESTIMATED}">${i18n.estimated(perItem)}</span>
             <span class="a-color-secondary">(${itemCount} @ ${priceInDollars})</span>
           </span>
         </div>
@@ -407,9 +421,7 @@
 
     // Price in pennies
     var price = cents + whole * 100;
-    //var perItem = CURRENCY_SIGN + toFixedCeil(price / countInPack / 100, 2);
     var perItem = formatter.format(toFixedCeil(price / countInPack / 100, 2))
-    //var priceInDollars = CURRENCY_SIGN + whole + DECIMAL_SEPARATOR+ cents;
     var priceInDollars = formatter.format(price/100)
 
     // Stick the per/item price in a row below the price.
@@ -417,7 +429,7 @@
     $(`
     <div class="a-row a-spacing-none">
       <div class="a-size-small a-text-normal">
-        <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
+        <span style="${STYLE_ESTIMATED}">${i18n.estimated(perItem)}</span>
         <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
       </div>
     </div>
@@ -623,6 +635,7 @@
 
           // Only update price if it wasn't found
           var foundPrice = null;
+          var countInDetail = getCountFromTitle(htmlDoc.title);
           var $primeHtml = null;
           if (null === theParsedPrice) {
             foundPrice = _findPagePriceInHtml(htmlDoc);
@@ -676,10 +689,10 @@
 
           // Display results
           if (null !== foundPrice) {
-            if (null !== count) {
+            if (null !== countInDetail) {
               addEstimatedToElement(
                 foundPrice.pennies,
-                count,
+                countInDetail,
                 $addElementsTo,
                 1,
                 NEW_ITEM_DETAILS_CLASS
@@ -760,7 +773,6 @@
       return;
     }
 
-    //var perItem = CURRENCY_SIGN + toFixedCeil(parsed.pennies / countInPack / 100, 2);
     var perItem = formatter.format(toFixedCeil(parsed.pennies / countInPack / 100, 2))
     var priceInDollars = parsed.price;
 
@@ -770,7 +782,7 @@
       .after(
         `
       <div class="a-row a-text-normal ${ID}">
-        <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
+        <span style="${STYLE_ESTIMATED}">${i18n.estimated(perItem)}</span>
         <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
       </div>
       `
@@ -992,6 +1004,9 @@
       ["\\w+ of ", ""], // foobar of X: pack of 3, box of 12
       ["", "[ -]*pieces"], // 2 pieces
       ["", "[ -]*pcs"], // 2 pcs
+
+      ["lots? de ", ""],  // Lot de
+      //["", "^[ -]*"], // 2 items
     ];
 
     var regExes = qualifiers.map(function (qual) {
@@ -1001,6 +1016,11 @@
         "i"
       );
     });
+
+      regExes.push(new RegExp(
+        "^\\b(?:(\\d+))\\b",
+        "i"
+      ))
 
     // Let's build all word numbers
     // https://stackoverflow.com/a/493788/721519
