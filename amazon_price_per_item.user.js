@@ -6,8 +6,10 @@
 // @downloadURL  https://github.com/Skinner927/greasemonkey-scripts/raw/master/amazon_price_per_item.user.js
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
-// @version      1.15
+// @author       LudooOdOa
+// @version      1.20
 // @match        *://*.amazon.com/*
+// @match        *://*.amazon.fr/*
 // @run-at       document-start
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
@@ -20,6 +22,7 @@
 */
 
 /* Changelog
+ * 1.20 - i18n support.
  * 1.15 - Add "/pack" support.
  * 1.14 - Fetch prices of product Twister color/variation/options.
  * 1.13 - Greatly improve estimates on "twister" product pages (multiple options).
@@ -38,6 +41,12 @@
  * 1.1  - Add support for suggested items in item details.
  * 1.0  - Initial release.
  */
+
+/*
+i18n fr samples:
+- https://www.amazon.fr/Amazon-Basics-Piles-Rechargeables-Pr%C3%A9-Charg%C3%A9es/dp/B007B9NXAC/ref=sr_1_5_pp
+- https://www.amazon.fr/Piles-Auditives-Rayovac-Appareil-Auditif/dp/B0CZS7X64G/ref=asc_df_B0C46K6SM7/
+*/
 
 /* global module:writable, $:readonly */
 // Hand rolled to work with node require and run in the browser
@@ -58,6 +67,7 @@
       parsePrice: parsePrice,
     };
   }
+
   // If we're not returning exports, run the gm script
   var ID = "gm_amazon_price_per_item";
   var DEBUG = false;
@@ -65,6 +75,38 @@
     DEBUG = true;
   }
   var STYLE_ESTIMATED = "color:blue;";
+  //var CURRENCY_SIGN = "$";
+  var CURRENCY_MODE='USD'
+
+  var LOCALE=document.documentElement.lang //"en-US"
+  let segments = LOCALE.split('-'), country=segments[0], region=segments[1];
+  //var DECIMAL_SEPARATOR="."
+  var DECIMAL_SEPARATOR= new Intl.NumberFormat(LOCALE).format(1.1).replaceAll('1','')
+  //var THOUSANDS_SEPARATOR=",";
+  var THOUSANDS_SEPARATOR=new Intl.NumberFormat(LOCALE).format(1111).replaceAll('1','')
+  let currencies = {
+    fr: 'EUR',
+    en: 'USD'
+  }
+  CURRENCY_MODE=currencies[country]||'USD'
+
+  let i18n_strings = {
+    fr: {
+        item: 'unité',
+        estimated: function(perItem){ return `Environ ${perItem} par unité`}
+    },
+    en: {
+        item: 'item',
+        estimated: function(perItem){ return `Estimated ${perItem} per item`}
+    }
+  };
+  let i18n=i18n_strings[country]
+  let UNIT_WORD = i18n.item;
+
+  let formatter = new Intl.NumberFormat(LOCALE, {
+        style: 'currency',
+        currency: CURRENCY_MODE
+  });
   // We blast this simply so we can get a context if we need to debug
   console.log(ID, "Starting", window.location);
 
@@ -154,15 +196,15 @@
       return;
     }
     // Price in pennies
-    var perItem = "$" + toFixedCeil(priceInPennies / itemCount / 100, 2);
-    var priceInDollars = "$" + toFixedCeil(priceInPennies / 100, 2);
+    var perItem = formatter.format(toFixedCeil(priceInPennies / itemCount / 100, 2));
+    var priceInDollars = formatter.format( toFixedCeil(priceInPennies / 100, 2) );
 
     var $note = null;
     if (1 == style) {
       $note = $(`
         <div class="a-section a-spacing-small aok-align-center">
           <span class="a-size-small" title="${itemCount} @ ${priceInDollars}" style="${STYLE_ESTIMATED}">
-            ${perItem}/item
+            ${perItem}/${i18n.item}
           </span>
         </div>
       `);
@@ -170,7 +212,7 @@
       $note = $(`
         <div class="a-section a-spacing-small aok-align-center">
           <span class="a-size-small">
-            <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
+            <span style="${STYLE_ESTIMATED}">${i18n.estimated(perItem)}</span>
             <span class="a-color-secondary">(${itemCount} @ ${priceInDollars})</span>
           </span>
         </div>
@@ -211,6 +253,9 @@
       return null;
     }
     price = price.trim();
+    if (!price) {
+      return null;
+    }
 
     var whole = NaN;
     var cents = NaN;
@@ -240,7 +285,7 @@
         if (c < parsePrice.CHAR_0 || c > parsePrice.CHAR_9) {
           // Invalid character
           if (1 === state) {
-            if ("," === price[i]) {
+            if (THOUSANDS_SEPARATOR === price[i]) {
               // Ignore commas
               continue;
             }
@@ -277,12 +322,12 @@
     if (isNaN(whole) || isNaN(cents)) {
       return null;
     }
-
+    let pennies = cents + whole*100
     return {
       dollars: whole,
       cents: cents,
-      pennies: cents + whole * 100,
-      price: `\$${whole.toLocaleString("en-US")}.${cents}`,
+      pennies: pennies,
+      price: formatter.format(pennies/100),
     };
   }
 
@@ -376,15 +421,15 @@
 
     // Price in pennies
     var price = cents + whole * 100;
-    var perItem = "$" + toFixedCeil(price / countInPack / 100, 2);
-    var priceInDollars = "$" + whole + "." + cents;
+    var perItem = formatter.format(toFixedCeil(price / countInPack / 100, 2))
+    var priceInDollars = formatter.format(price/100)
 
     // Stick the per/item price in a row below the price.
     var $row = $price.closest(".a-row");
     $(`
     <div class="a-row a-spacing-none">
       <div class="a-size-small a-text-normal">
-        <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
+        <span style="${STYLE_ESTIMATED}">${i18n.estimated(perItem)}</span>
         <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
       </div>
     </div>
@@ -568,6 +613,8 @@
         }
       }
 
+      $addElementsTo.css({'display':'flex','flex-direction':'column'});
+
       // Shove a ... div below the button of this option to signal prices are
       // loading. It will be updated later.
       var $loading = $(
@@ -588,6 +635,7 @@
 
           // Only update price if it wasn't found
           var foundPrice = null;
+          var countInDetail = getCountFromTitle(htmlDoc.title);
           var $primeHtml = null;
           if (null === theParsedPrice) {
             foundPrice = _findPagePriceInHtml(htmlDoc);
@@ -641,17 +689,17 @@
 
           // Display results
           if (null !== foundPrice) {
-            if (null !== count) {
+            if (null !== countInDetail) {
               addEstimatedToElement(
                 foundPrice.pennies,
-                count,
+                countInDetail,
                 $addElementsTo,
                 1,
                 NEW_ITEM_DETAILS_CLASS
               );
             }
             $loading.text("");
-            $loading.append($("<div>" + foundPrice.price + "</div>"));
+            $loading.append($("<div class='my-price'>" + foundPrice.price + "</div>"));
             $loading.append($primeHtml);
           } else {
             $loading.remove();
@@ -725,7 +773,7 @@
       return;
     }
 
-    var perItem = "$" + toFixedCeil(parsed.pennies / countInPack / 100, 2);
+    var perItem = formatter.format(toFixedCeil(parsed.pennies / countInPack / 100, 2))
     var priceInDollars = parsed.price;
 
     $price
@@ -734,7 +782,7 @@
       .after(
         `
       <div class="a-row a-text-normal ${ID}">
-        <span style="${STYLE_ESTIMATED}">Estimated ${perItem} per item</span>
+        <span style="${STYLE_ESTIMATED}">${i18n.estimated(perItem)}</span>
         <span class="a-color-secondary">(${countInPack} @ ${priceInDollars})</span>
       </div>
       `
@@ -956,6 +1004,9 @@
       ["\\w+ of ", ""], // foobar of X: pack of 3, box of 12
       ["", "[ -]*pieces"], // 2 pieces
       ["", "[ -]*pcs"], // 2 pcs
+
+      ["lots? de ", ""],  // Lot de
+      //["", "^[ -]*"], // 2 items
     ];
 
     var regExes = qualifiers.map(function (qual) {
@@ -965,6 +1016,11 @@
         "i"
       );
     });
+
+      regExes.push(new RegExp(
+        "^\\b(?:(\\d+))\\b",
+        "i"
+      ))
 
     // Let's build all word numbers
     // https://stackoverflow.com/a/493788/721519
@@ -1011,6 +1067,46 @@
       "ninety",
     ];
     var scales = ["hundred", "thousand", "million", "billion", "trillion"];
+
+     if (country ==='fr'){
+
+         // TODO : use const { ToWords } = require('to-words'); for all languages
+         units = [
+             "zero",
+             "un",
+             "deux",
+             "trois",
+             "quatre",
+             "cing",
+             "six",
+             "sept",
+             "huit",
+             "neuf",
+             "dix",
+             "onze",
+             "douze",
+             "treize",
+             "quatorze",
+             "quinze",
+             "seize",
+             "dix-sept",
+             "dix-huit",
+             "dix-neuf",
+         ];
+         tens = [
+             "",
+             "",
+             "vingt",
+             "trente",
+             "quarante",
+             "cinquantte",
+             "soixante",
+             "soixante-dix",
+             "quatre-vingt",
+             "quatre-vingt-dix",
+         ];
+         scales = ["centaine", "millier", "million", "milliard", "trilliard"];
+     }
 
     /* numberWords */
     // Build numberWords which will be a map for all words to a tuple that will
