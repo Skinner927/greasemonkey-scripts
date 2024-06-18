@@ -7,7 +7,7 @@
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
 // @author       LudooOdOa
-// @version      1.20
+// @version      1.21
 // @match        *://*.amazon.com/*
 // @match        *://*.amazon.fr/*
 // @run-at       document-start
@@ -22,6 +22,7 @@
 */
 
 /* Changelog
+ * 1.21 = Add "4 sets" support.
  * 1.20 - i18n support.
  * 1.15 - Add "/pack" support.
  * 1.14 - Fetch prices of product Twister color/variation/options.
@@ -82,10 +83,16 @@ i18n fr samples:
   // If we're not returning exports, run the gm script
   var ID = "gm_amazon_price_per_item";
   var DEBUG = false;
-  if (!DEBUG && window.location.search.indexOf("appi=1") !== -1) {
+  if (
+    !DEBUG &&
+    /(^\??|&)appi=1|debug=1(&|$)/.test(window.location.search.toLowerCase())
+  ) {
     DEBUG = true;
   }
   var STYLE_ESTIMATED = "color:blue;";
+  if (!DEBUG) {
+    console.info(ID, "Enable DEBUG logs with appi=1 or debug=1 in URL search");
+  }
 
   const LOCALE = document.documentElement.lang; //"en-US"
   const segments = LOCALE.split("-");
@@ -148,7 +155,7 @@ i18n fr samples:
       console.info.apply(console, args);
     }
   }
-  log("will log all messages");
+  log("DEBUG is enabled");
 
   function noop() {}
 
@@ -1046,9 +1053,9 @@ i18n fr samples:
       ["\\w+ of ", ""], // foobar of X: pack of 3, box of 12
       ["", "[ -]*pieces"], // 2 pieces
       ["", "[ -]*pcs"], // 2 pcs
-
       ["lots? de ", ""], // Lot de 7
       new RegExp("^(?:(" + qualNumbers + ")|(\\x00))", "i"), // 2 things
+      ["", " *sets?"], // 4 sets
     ];
 
     var regExes = qualifiers
@@ -1176,6 +1183,7 @@ i18n fr samples:
       }
       var digits = match[1];
       var text = match[2];
+      log("handleMatch digits=" + digits + " text=" + text);
 
       // Digits trump text numbers
       if (digits) {
@@ -1186,6 +1194,7 @@ i18n fr samples:
           log(logIndent + "parsed int=" + d);
           return d;
         }
+        log("invalid digits=" + digits);
       }
       if (!text) {
         return null;
@@ -1217,7 +1226,11 @@ i18n fr samples:
         }
       }
       result += current;
-      return typeof result === "number" && result > 0 ? result : null;
+      if (typeof result === "number" && result > 0) {
+        return result;
+      }
+      log("invalid text=" + text);
+      return null;
     }
 
     // Parse a string for a count
@@ -1230,6 +1243,7 @@ i18n fr samples:
         log("parseTitle title=" + title);
         var result = handleMatch(title.match(exp), "  ");
         if (result) {
+          log("parseTitle success: result=" + result + " title=" + title);
           return result;
         }
       }
