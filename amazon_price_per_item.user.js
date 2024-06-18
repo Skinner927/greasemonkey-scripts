@@ -51,64 +51,85 @@ i18n fr samples:
 /* global module:writable, $:readonly */
 // Hand rolled to work with node require and run in the browser
 (function (factory) {
-  if (typeof exports === "object" && typeof module !== "undefined") {
-    // Just return exports
-    module.exports = factory(true);
-  } else {
-    // Run it
-    factory();
+  function isObj(val) {
+    return val === "object";
   }
-})(function factory(returnExports) {
-  "use strict";
-  if (returnExports) {
-    return {
-      buildTitleParser: buildTitleParser,
-      pollUntil: pollUntil,
-      parsePrice: parsePrice,
+
+  if (
+    isObj(typeof exports) &&
+    isObj(typeof module) &&
+    isObj(typeof module.exports)
+  ) {
+    // All of this so I don't have to use a testing framework 0_o
+    module.exports = exports = function factoryWrapper(theWindow, theDocument) {
+      theWindow = isObj(typeof theWindow)
+        ? theWindow
+        : isObj(typeof window)
+        ? window
+        : isObj(typeof globalThis)
+        ? globalThis
+        : { document: {} };
+
+      return factory(theWindow, theDocument || theWindow.document || {}, true);
     };
+  } else {
+    // Hopefully in a browser
+    factory(window, document, false);
   }
+})(function factory(window, document, returnExports) {
+  "use strict";
 
   // If we're not returning exports, run the gm script
   var ID = "gm_amazon_price_per_item";
   var DEBUG = false;
-  if (!DEBUG && window.location.search.indexOf("appi=1")) {
+  if (!DEBUG && window.location.search.indexOf("appi=1") !== -1) {
     DEBUG = true;
   }
   var STYLE_ESTIMATED = "color:blue;";
-  //var CURRENCY_SIGN = "$";
-  var CURRENCY_MODE='USD'
 
-  var LOCALE=document.documentElement.lang //"en-US"
-  let segments = LOCALE.split('-'), country=segments[0], region=segments[1];
+  const LOCALE = document.documentElement.lang; //"en-US"
+  const segments = LOCALE.split("-");
+  const country = segments[0];
+  const region = segments[1];
   //var DECIMAL_SEPARATOR="."
-  var DECIMAL_SEPARATOR= new Intl.NumberFormat(LOCALE).format(1.1).replaceAll('1','')
+  const DECIMAL_SEPARATOR = new Intl.NumberFormat(LOCALE)
+    .format(1.1)
+    .replaceAll("1", "");
   //var THOUSANDS_SEPARATOR=",";
-  var THOUSANDS_SEPARATOR=new Intl.NumberFormat(LOCALE).format(1111).replaceAll('1','')
-  let currencies = {
-    fr: 'EUR',
-    en: 'USD'
-  }
-  CURRENCY_MODE=currencies[country]||'USD'
+  const THOUSANDS_SEPARATOR = new Intl.NumberFormat(LOCALE)
+    .format(1111)
+    .replaceAll("1", "");
+  const currencies = {
+    fr: "EUR",
+    en: "USD",
+  };
+  const CURRENCY_MODE = currencies[country] || currencies.en;
 
-  let i18n_strings = {
+  const i18n_strings = {
     fr: {
-        item: 'unité',
-        estimated: function(perItem){ return `Environ ${perItem} par unité`}
+      item: "unité",
+      estimated: function (perItem) {
+        return `Environ ${perItem} par unité`;
+      },
     },
     en: {
-        item: 'item',
-        estimated: function(perItem){ return `Estimated ${perItem} per item`}
-    }
+      item: "item",
+      estimated: function (perItem) {
+        return `Estimated ${perItem} per item`;
+      },
+    },
   };
-  let i18n=i18n_strings[country]
-  let UNIT_WORD = i18n.item;
+  const i18n = i18n_strings[country] || i18n_strings.en;
 
-  let formatter = new Intl.NumberFormat(LOCALE, {
-        style: 'currency',
-        currency: CURRENCY_MODE
+  const formatter = new Intl.NumberFormat(LOCALE, {
+    style: "currency",
+    currency: CURRENCY_MODE,
   });
-  // We blast this simply so we can get a context if we need to debug
-  console.log(ID, "Starting", window.location);
+
+  if (DEBUG || !returnExports) {
+    // We blast this simply so we can get a context if we need to debug
+    console.log(ID, "Starting", window.location);
+  }
 
   // TODO: Drop this if everything is working
   // var realUnsafeWindow = (function getUnsafeWindow() {
@@ -196,8 +217,10 @@ i18n fr samples:
       return;
     }
     // Price in pennies
-    var perItem = formatter.format(toFixedCeil(priceInPennies / itemCount / 100, 2));
-    var priceInDollars = formatter.format( toFixedCeil(priceInPennies / 100, 2) );
+    var perItem = formatter.format(
+      toFixedCeil(priceInPennies / itemCount / 100, 2)
+    );
+    var priceInDollars = formatter.format(toFixedCeil(priceInPennies / 100, 2));
 
     var $note = null;
     if (1 == style) {
@@ -259,12 +282,15 @@ i18n fr samples:
 
     var whole = NaN;
     var cents = NaN;
+    // TODO: i18n currency sign, thousands sep, fraction sep
     var match = price.match(/\$ *([0-9,]*) *\. *(\d*)/);
     if (!match) {
+      // TODO: i18n thousands sep, fraction sep
       // Try without dollar sign
       match = price.match(/([0-9,]*) *\. *(\d*)/);
     }
     if (match && match.length === 3) {
+      // TODO: i18n thousands sep
       var m1 = match[1].replace(/,/g, "").trim();
       var m2 = match[2].trim();
       whole = m1 ? parseInt(m1, 10) : 0;
@@ -322,12 +348,12 @@ i18n fr samples:
     if (isNaN(whole) || isNaN(cents)) {
       return null;
     }
-    let pennies = cents + whole*100
+    let pennies = cents + whole * 100;
     return {
       dollars: whole,
       cents: cents,
       pennies: pennies,
-      price: formatter.format(pennies/100),
+      price: formatter.format(pennies / 100),
     };
   }
 
@@ -421,8 +447,8 @@ i18n fr samples:
 
     // Price in pennies
     var price = cents + whole * 100;
-    var perItem = formatter.format(toFixedCeil(price / countInPack / 100, 2))
-    var priceInDollars = formatter.format(price/100)
+    var perItem = formatter.format(toFixedCeil(price / countInPack / 100, 2));
+    var priceInDollars = formatter.format(price / 100);
 
     // Stick the per/item price in a row below the price.
     var $row = $price.closest(".a-row");
@@ -613,7 +639,7 @@ i18n fr samples:
         }
       }
 
-      $addElementsTo.css({'display':'flex','flex-direction':'column'});
+      $addElementsTo.css({ display: "flex", "flex-direction": "column" });
 
       // Shove a ... div below the button of this option to signal prices are
       // loading. It will be updated later.
@@ -699,7 +725,7 @@ i18n fr samples:
               );
             }
             $loading.text("");
-            $loading.append($("<div class='my-price'>" + foundPrice.price + "</div>"));
+            $loading.append($("<div>" + foundPrice.price + "</div>"));
             $loading.append($primeHtml);
           } else {
             $loading.remove();
@@ -773,7 +799,9 @@ i18n fr samples:
       return;
     }
 
-    var perItem = formatter.format(toFixedCeil(parsed.pennies / countInPack / 100, 2))
+    var perItem = formatter.format(
+      toFixedCeil(parsed.pennies / countInPack / 100, 2)
+    );
     var priceInDollars = parsed.price;
 
     $price
@@ -849,6 +877,14 @@ i18n fr samples:
       noDupes(ID + "-newSuggestedItem", newSuggestedItem),
       false
     );
+  }
+
+  if (returnExports) {
+    return {
+      buildTitleParser: buildTitleParser,
+      pollUntil: pollUntil,
+      parsePrice: parsePrice,
+    };
   }
 
   // Wait for jQuery to be loaded
@@ -988,6 +1024,9 @@ i18n fr samples:
 
   function buildTitleParser(expose) {
     expose = expose || {};
+    const qualWords = "(?:[a-zA-Z\\-]+(?: |-)?){1,4}"; // We allow up to 4 words
+    const qualNumbers = "\\d[\\d,. ]*"; // Allow 1,234 1.234 1 234
+    const qualQty = "(?:(" + qualNumbers + ")|(" + qualWords + "))";
     /*
     Qualifiers -
     These are the overall matches that we use to identify packs.
@@ -995,7 +1034,10 @@ i18n fr samples:
     and the second index is the "suffix"
     wherein the number (be it a digit or words) lies between.
     Both values will be added to a regex so make it work correctly.
-    Ensure any groups () are non-capturing (?:...)
+    Ensure any groups () are non-capturing (?:...).
+    If supplying a RegExp directly, ensure the case-insensitive flag is set and
+    there are exactly 2 capturing groups. The first group is for digits, the
+    second is words (see `qualQty`).
     */
     var qualifiers = [
       ["", " per \\w"], // X per Box. X per pack.
@@ -1005,22 +1047,18 @@ i18n fr samples:
       ["", "[ -]*pieces"], // 2 pieces
       ["", "[ -]*pcs"], // 2 pcs
 
-      ["lots? de ", ""],  // Lot de
-      //["", "^[ -]*"], // 2 items
+      ["lots? de ", ""], // Lot de 7
+      new RegExp("^(?:(" + qualNumbers + ")|(\\x00))", "i"), // 2 things
     ];
 
-    var regExes = qualifiers.map(function (qual) {
-      var words = "(?:[a-zA-Z\\-]+(?: |-)?){1,4}"; // We allow up to 4 words
-      return new RegExp(
-        "\\b" + qual[0] + "(?:(\\d+)|(" + words + "))" + qual[1] + "\\b",
-        "i"
-      );
-    });
-
-      regExes.push(new RegExp(
-        "^\\b(?:(\\d+))\\b",
-        "i"
-      ))
+    var regExes = qualifiers
+      .filter((q) => !!q)
+      .map(function (qual) {
+        if (qual instanceof RegExp) {
+          return qual;
+        }
+        return new RegExp("\\b" + qual[0] + qualQty + qual[1] + "\\b", "i");
+      });
 
     // Let's build all word numbers
     // https://stackoverflow.com/a/493788/721519
@@ -1068,45 +1106,44 @@ i18n fr samples:
     ];
     var scales = ["hundred", "thousand", "million", "billion", "trillion"];
 
-     if (country ==='fr'){
-
-         // TODO : use const { ToWords } = require('to-words'); for all languages
-         units = [
-             "zero",
-             "un",
-             "deux",
-             "trois",
-             "quatre",
-             "cing",
-             "six",
-             "sept",
-             "huit",
-             "neuf",
-             "dix",
-             "onze",
-             "douze",
-             "treize",
-             "quatorze",
-             "quinze",
-             "seize",
-             "dix-sept",
-             "dix-huit",
-             "dix-neuf",
-         ];
-         tens = [
-             "",
-             "",
-             "vingt",
-             "trente",
-             "quarante",
-             "cinquantte",
-             "soixante",
-             "soixante-dix",
-             "quatre-vingt",
-             "quatre-vingt-dix",
-         ];
-         scales = ["centaine", "millier", "million", "milliard", "trilliard"];
-     }
+    if (country === "fr") {
+      // TODO : use const { ToWords } = require('to-words'); for all languages
+      units = [
+        "zero",
+        "un",
+        "deux",
+        "trois",
+        "quatre",
+        "cing",
+        "six",
+        "sept",
+        "huit",
+        "neuf",
+        "dix",
+        "onze",
+        "douze",
+        "treize",
+        "quatorze",
+        "quinze",
+        "seize",
+        "dix-sept",
+        "dix-huit",
+        "dix-neuf",
+      ];
+      tens = [
+        "",
+        "",
+        "vingt",
+        "trente",
+        "quarante",
+        "cinquantte",
+        "soixante",
+        "soixante-dix",
+        "quatre-vingt",
+        "quatre-vingt-dix",
+      ];
+      scales = ["centaine", "millier", "million", "milliard", "trilliard"];
+    }
 
     /* numberWords */
     // Build numberWords which will be a map for all words to a tuple that will
@@ -1131,8 +1168,10 @@ i18n fr samples:
       });
     });
 
-    function handleMatch(match) {
+    function handleMatch(match, logIndent) {
+      logIndent = logIndent || "";
       if (!match) {
+        log(logIndent + "no match");
         return null;
       }
       var digits = match[1];
@@ -1140,8 +1179,11 @@ i18n fr samples:
 
       // Digits trump text numbers
       if (digits) {
+        log(logIndent + "digits=" + digits);
+        digits = digits.replace(/[ .,]/g, "");
         var d = parseInt(digits, 10);
         if (d && !isNaN(d)) {
+          log(logIndent + "parsed int=" + d);
           return d;
         }
       }
@@ -1185,7 +1227,8 @@ i18n fr samples:
         var exp = regExes[i];
         exp.lastIndex = 0; // Reset it
 
-        var result = handleMatch(title.match(exp));
+        log("parseTitle title=" + title);
+        var result = handleMatch(title.match(exp), "  ");
         if (result) {
           return result;
         }

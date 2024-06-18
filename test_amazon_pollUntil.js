@@ -1,7 +1,11 @@
 // You need to run in node 10+.
 // This is an example of over engineering. Why I didn't use a test framework
 // or really just barf to console, I don't know.
-var gmScript = require("./amazon_price_per_item.user.js");
+var fresh = require("./test_amazon_utils.js").fresh();
+var gmScript = require("./amazon_price_per_item.user.js")(
+  fresh.window,
+  fresh.window.document
+);
 var chalk = null;
 try {
   // npm install chalk@4.x

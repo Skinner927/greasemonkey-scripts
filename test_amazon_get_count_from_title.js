@@ -27,9 +27,15 @@ var tests = [
   ["Sensitive Skin, 720 Count (12 packs),", 720],
   ["pack of 12 (2 packs) cheese", 12],
   ["(2 packs) pack of 12 cheese", 12],
+  // TODO: test with locale
+  ["lot de 1 799 fromage", 1799],
 ];
 
-var gmScript = require("./amazon_price_per_item.user.js");
+var fresh = require("./test_amazon_utils.js").fresh();
+var gmScript = require("./amazon_price_per_item.user.js")(
+  fresh.window,
+  fresh.window.document
+);
 var chalk = null;
 try {
   // npm install chalk@4.x
@@ -58,7 +64,7 @@ tests.forEach(function (test) {
       test: test[0],
       result: expose.handleMatch(test[0].toLowerCase().match(reg)),
       expected: test[1],
-      reg: String(reg),
+      regexp: reg,
     };
   });
   var onePassed = allMatchesForTest.some((r) => r.result === r.expected);

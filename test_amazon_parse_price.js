@@ -31,7 +31,11 @@ function TestFail(message) {
 TestFail.prototype = Object.create(Error.prototype);
 TestFail.prototype.constructor = TestFail;
 
-var gmScript = require("./amazon_price_per_item.user.js");
+var fresh = require("./test_amazon_utils.js").fresh();
+var gmScript = require("./amazon_price_per_item.user.js")(
+  fresh.window,
+  fresh.window.document
+);
 var chalk = null;
 try {
   // npm install chalk@4.x
@@ -66,6 +70,13 @@ tests.forEach(function (test, i) {
   var price = test[0];
   var expected = test[1];
 
+  if (expected) {
+    expected.price = [
+      fmt.format(expected.dollars).split(".")[0],
+      expected.cents < 10 ? "0" + expected.cents : String(expected.cents),
+    ].join(".");
+  }
+
   try {
     var result = parsePrice(price);
 
@@ -83,12 +94,10 @@ tests.forEach(function (test, i) {
       if (result.cents !== expected.cents) {
         throw new TestFail("cents");
       }
-      var priceStr = [
-        fmt.format(expected.dollars).split(".")[0],
-        expected.cents,
-      ].join(".");
-      if (result.price !== priceStr) {
-        throw new TestFail(`price (actual ${result.price}) != ${priceStr}`);
+      if (result.price !== expected.price) {
+        throw new TestFail(
+          `price result ${result.price}) != ${expected.price} expected`
+        );
       }
       var pennies = expected.dollars * 100 + expected.cents;
       if (result.pennies !== pennies) {
