@@ -7,7 +7,7 @@
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
 // @author       LudooOdOa
-// @version      1.21
+// @version      1.22
 // @match        *://*.amazon.com/*
 // @match        *://*.amazon.fr/*
 // @run-at       document-start
@@ -22,6 +22,7 @@
 */
 
 /* Changelog
+ * 1.22 = Change "pieces" to "pieces?" matching
  * 1.21 = Add "4 sets" support.
  * 1.20 - i18n support.
  * 1.15 - Add "/pack" support.
@@ -1051,7 +1052,7 @@ i18n fr samples:
       ["", "[ /-]*pack"], // 2 pack or 2-pack or 2 -pack or 2pack (but not "packs")
       ["", "[ ,]*count"], // 4 count or 4, count or 4Count
       ["\\w+ of ", ""], // foobar of X: pack of 3, box of 12
-      ["", "[ -]*pieces"], // 2 pieces
+      ["", "[ -]*pieces?"], // 2 pieces
       ["", "[ -]*pcs"], // 2 pcs
       ["lots? de ", ""], // Lot de 7
       new RegExp("^(?:(" + qualNumbers + ")|(\\x00))", "i"), // 2 things
