@@ -7,7 +7,7 @@
 // @icon         https://www.amazon.com/favicon.ico
 // @author       skinner927
 // @author       LudooOdOa
-// @version      1.22
+// @version      1.23
 // @match        *://*.amazon.com/*
 // @match        *://*.amazon.fr/*
 // @run-at       document-start
@@ -22,8 +22,9 @@
 */
 
 /* Changelog
- * 1.22 = Change "pieces" to "pieces?" matching
- * 1.21 = Add "4 sets" support.
+ * 1.23 - Give slang a lower match priority than direct rgexp matches
+ * 1.22 - Change "pieces" to "pieces?" matching
+ * 1.21 - Add "4 sets" support.
  * 1.20 - i18n support.
  * 1.15 - Add "/pack" support.
  * 1.14 - Fetch prices of product Twister color/variation/options.
@@ -1049,7 +1050,7 @@ i18n fr samples:
     */
     var qualifiers = [
       ["", " per \\w"], // X per Box. X per pack.
-      ["", "[ /-]*pack"], // 2 pack or 2-pack or 2 -pack or 2pack (but not "packs")
+      ["", "[ \\/-]*pack"], // 2 pack or 2-pack or 2 -pack or 2pack (but not "packs")
       ["", "[ ,]*count"], // 4 count or 4, count or 4Count
       ["\\w+ of ", ""], // foobar of X: pack of 3, box of 12
       ["", "[ -]*pieces?"], // 2 pieces
@@ -1176,11 +1177,14 @@ i18n fr samples:
       });
     });
 
+    /// Returns a tuple (array) of the number matched and if it matches a pattern.
+    /// If it does not match a pattern, its value should only be used as a fallback.
+    /// e.g. [4, true]; [null, null]; [8, false];
     function handleMatch(match, logIndent) {
       logIndent = logIndent || "";
       if (!match) {
         log(logIndent + "no match");
-        return null;
+        return [null, null];
       }
       var digits = match[1];
       var text = match[2];
@@ -1193,12 +1197,12 @@ i18n fr samples:
         var d = parseInt(digits, 10);
         if (d && !isNaN(d)) {
           log(logIndent + "parsed int=" + d);
-          return d;
+          return [d, true];
         }
         log("invalid digits=" + digits);
       }
       if (!text) {
-        return null;
+        return [null, null];
       }
 
       // Ok, figure out what it's saying :D
@@ -1228,27 +1232,38 @@ i18n fr samples:
       }
       result += current;
       if (typeof result === "number" && result > 0) {
-        return result;
+        log("handleMatch fallback=" + result);
+        return [result, false];
       }
       log("invalid text=" + text);
-      return null;
+      return [null, null];
     }
 
     // Parse a string for a count
     function parseTitle(title) {
       title = (title || "").trim().toLowerCase();
+      var fallback = null;
       for (var i = 0; i < regExes.length; i++) {
         var exp = regExes[i];
         exp.lastIndex = 0; // Reset it
 
-        log("parseTitle title=" + title);
-        var result = handleMatch(title.match(exp), "  ");
+        log("parseTitle title=" + title + " exp=" + exp);
+        var resultTuple = handleMatch(title.match(exp), "  ");
+        var result = resultTuple[0];
+        var isPatternMatch = !!resultTuple[1];
         if (result) {
-          log("parseTitle success: result=" + result + " title=" + title);
-          return result;
+          if (isPatternMatch) {
+            log("parseTitle success: result=" + result + " title=" + title);
+            return result;
+          } else {
+            if (fallback === null || result > fallback) {
+              fallback = result;
+            }
+          }
         }
       }
-      return null;
+      log("parseTitle using fallback=" + fallback);
+      return fallback;
     }
 
     expose.regExes = regExes;

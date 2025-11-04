@@ -29,6 +29,10 @@ var tests = [
   ["(2 packs) pack of 12 cheese", 12],
   // TODO: test with locale
   ["lot de 1 799 fromage", 1799],
+  [
+    "Bunny brand aa batteries alkaline power, 32 count alkaline double a battery pack",
+    32,
+  ],
 ];
 
 var fresh = require("./test_amazon_utils.js").fresh();
@@ -60,9 +64,11 @@ tests.forEach(function (test) {
   // Test every regex against this test so we can see what matches
   var allMatchesForTest = expose.regExes.map(function (reg) {
     reg.lastIndex = 0;
+    var m = expose.handleMatch(test[0].toLowerCase().match(reg));
     return {
       test: test[0],
-      result: expose.handleMatch(test[0].toLowerCase().match(reg)),
+      result: m[0],
+      isFallback: !m[1],
       expected: test[1],
       regexp: reg,
     };
