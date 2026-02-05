@@ -3,7 +3,7 @@
 // @match       *://gitlab.*/*/-/pipelines/*
 // @match       *://gitlab.*.*/*/-/pipelines/*
 // @grant       GM_addStyle
-// @version     1.5
+// @version     1.6
 // @author      skinner927
 // @description Show pipelines as a vertical list instead of having to scroll horizontally.
 // @namespace   https://github.com/Skinner927/greasemonkey-scripts
@@ -14,6 +14,8 @@
 // ==/UserScript==
 
 /** Changelog
+ * v1.6
+ *   Fixes for v18.9.0-ee
  * v1.5
  *   Fixes for v17.6.4-ee
  * v1.4:
@@ -32,24 +34,8 @@
 
 (function() {
   GM_addStyle(`
-    /* outer container */
-    .js-pipeline-graph div[pipeline-id][view-type='stage'] > div.gl-flex {
-      flex-direction: column;
-    }
-    /* container that holds the job buttons */
-    .js-pipeline-graph div[pipeline-id][view-type='stage'] > div.gl-flex > div.stage-column > .gl-flex.gl-flex-direction-column {
-      flex-direction: row;
+    .js-pipeline-graph .\\@sm\\/panel\\:gl-flex-nowrap {
       flex-wrap: wrap;
     }
-
-    /* every job button */
-    .js-pipeline-graph div[pipeline-id][view-type='stage'] > div.gl-flex > div.stage-column > .gl-flex.gl-flex-direction-column > div {
-      margin-right: 5px;
-      width: 345px;
-      flex-grow: 0;
-      flex-shrink: 0;
-      flex-basis: auto;
-    }
-    /* flex: grow shrink basis */
   `);
 })();
