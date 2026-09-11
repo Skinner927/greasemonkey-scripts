@@ -21,3 +21,28 @@ It will show the price on both the search and item details page.
 ![Amazon price per item search](_files/gm_amazon_per_item_search.png)
 
 ![Amazon price per item details](_files/gm_amazon_per_item_item.png)
+
+## Gitlab MR Pipeline Controls
+
+Adds a one click button next to the pipeline status icon of every merge
+request on the merge request list page. What you get depends on the pipeline:
+
+- Still going (running, pending, created, preparing, scheduled, waiting for a
+  resource): a red `✕` that cancels the whole pipeline.
+- Failed or canceled: a blue `↻` that retries it, re-running only the failed
+  and canceled jobs, exactly like GitLab's own Retry button.
+- Anything else: no button.
+
+Neither asks for confirmation, and the button swaps itself over as soon as
+the pipeline changes state, so a pipeline you just retried can be canceled
+again right away.
+
+GitLab does not repaint the pipeline icon when you cancel or retry from this
+list, so the script does it: after the action it re-reads the real status and
+redraws the icon, then keeps checking every 3 seconds until the pipeline
+settles or 2 minutes pass. If the 2 minutes run out while the pipeline is
+still going, a grey `?` appears next to the icon, meaning "nobody has
+confirmed this status since". It disappears once the status actually changes.
+
+Both actions go through the same GraphQL mutations the GitLab UI uses, so they
+need nothing beyond the session you are already signed in with.
