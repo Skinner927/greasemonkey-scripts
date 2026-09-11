@@ -2,7 +2,7 @@
 // @name        Gitlab MR Pipeline Controls
 // @include     /^[^:]*?:\/\/gitlab\.[^\/]*?\/.*?\/-\/merge_requests.*?$/
 // @grant       none
-// @version     1.3
+// @version     1.4
 // @author      skinner927
 // @description One click cancel and retry for merge request pipelines, and it repaints the status icon afterwards instead of leaving it stale.
 // @namespace   https://github.com/Skinner927/greasemonkey-scripts
@@ -12,6 +12,10 @@
 // ==/UserScript==
 
 /** Changelog
+ * v1.4:
+ *   Also put the buttons on a single merge request page, on the head
+ *   pipeline in the widget. No status tracking there: GitLab keeps that
+ *   widget fresh itself, so we act and stop.
  * v1.3:
  *   Repaint the status icon after cancelling or retrying, instead of
  *   leaving it stale until the page is reloaded. Track the pipeline for up
@@ -36,6 +40,9 @@
  *   by hand instead of using GM_addStyle.
  * - Both actions go through the same GraphQL mutations the GitLab UI itself
  *   uses, so they die with the UI rather than with some deprecated REST route.
+ * - The Pipelines tab of a merge request is deliberately left alone: it
+ *   already has GitLab's own cancel and retry buttons, and its status links
+ *   carry no title, so canceling could not be told from canceled there.
  * - Don't go back to setInterval for watching the DOM. See queueScan. The
  *   timers in trackPipeline are a different thing: polling something remote
  *   on a cadence is what timers are for, and its deadline is wall clock.
@@ -93,8 +100,14 @@
   // Server rendered, so it is already there when we start, and it survives
   // GitLab's client side navigation within a project.
   var ROOT_SELECTOR = "#content-body";
-  // Rows on the merge request list page.
-  var ROW_SELECTOR = 'li[data-testid="issuable-container"]';
+  // Everywhere a head pipeline is shown with a link we can act on: a row on
+  // the merge request list, and the widget on a single merge request. Named
+  // explicitly rather than sweeping every ci-icon on the page, because the
+  // Pipelines tab of a merge request already has GitLab's own buttons.
+  var CONTAINER_SELECTORS = [
+    'li[data-testid="issuable-container"]',
+    ".ci-widget",
+  ];
   // The pipeline status icon inside a row. Its href carries the pipeline id.
   var CI_ICON_SELECTOR = 'a[data-testid="ci-icon"]';
   // The svg inside the status icon, e.g. status_running_borderless-icon.
@@ -334,6 +347,20 @@
     return markedStatus !== currentStatus;
   }
 
+  /**
+   * One merge request, as opposed to a list of them. GitLab keeps the
+   * widget on that page fresh by itself, so we act and stop there instead
+   * of tracking the pipeline.
+   * @param {?string} pathname
+   * @returns {boolean}
+   */
+  function isMergeRequestPage(pathname) {
+    if (typeof pathname !== "string") {
+      return false;
+    }
+    return /\/-\/merge_requests\/\d+/.test(pathname);
+  }
+
   // Everything below here needs a browser.
   if (returnExports) {
     return {
@@ -348,6 +375,7 @@
       variantForGroup: variantForGroup,
       isSettledStatus: isSettledStatus,
       shouldClearStaleMark: shouldClearStaleMark,
+      isMergeRequestPage: isMergeRequestPage,
     };
   }
 
@@ -649,8 +677,10 @@
         $btn.dataset.gmState = "done";
         $btn.textContent = "✓"; // check mark
         $btn.title = action.past + " pipeline #" + pipelineId;
-        // GitLab will not repaint the icon on its own, so we do.
-        if (projectPath) {
+        // On the list GitLab never repaints the icon, so we do. On a single
+        // merge request its own widget keeps itself fresh, so we leave it be
+        // rather than polling behind its back.
+        if (projectPath && !isMergeRequestPage(window.location.pathname)) {
           trackPipeline(projectPath, pipelineId);
         }
       },
@@ -682,10 +712,10 @@
   }
 
   /**
-   * Add, update or remove the action button on a single merge request row.
-   * Safe to call over and over on the same row.
+   * Add, update or remove the action button on one container holding a
+   * pipeline status icon. Safe to call over and over on the same one.
    */
-  function syncRow($row) {
+  function syncContainer($row) {
     var $existing = $row.querySelector("." + BTN_CLASS);
     var $icon = $row.querySelector(CI_ICON_SELECTOR);
     var pipeline = $icon && parsePipelineHref($icon.getAttribute("href"));
@@ -744,12 +774,12 @@
   }
 
   function scan() {
-    var $rows = document.querySelectorAll(ROW_SELECTOR);
-    for (var i = 0; i < $rows.length; i++) {
+    var $containers = document.querySelectorAll(CONTAINER_SELECTORS.join(","));
+    for (var i = 0; i < $containers.length; i++) {
       try {
-        syncRow($rows[i]);
+        syncContainer($containers[i]);
       } catch (e) {
-        console.error(ID, "row failed", e);
+        console.error(ID, "container failed", e);
       }
     }
   }

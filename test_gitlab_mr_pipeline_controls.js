@@ -46,6 +46,7 @@ var statusTitle = gmScript.statusTitle;
 var variantForGroup = gmScript.variantForGroup;
 var isSettledStatus = gmScript.isSettledStatus;
 var shouldClearStaleMark = gmScript.shouldClearStaleMark;
+var isMergeRequestPage = gmScript.isMergeRequestPage;
 
 var failures = [];
 
@@ -279,6 +280,26 @@ check(
     shouldClearStaleMark(t[0], t[1]),
     t[2]
   );
+});
+
+/// isMergeRequestPage
+// A single merge request: GitLab keeps its own widget fresh there, so we
+// act and stop rather than tracking the pipeline.
+[
+  ["/group/proj/-/merge_requests/463", true],
+  ["/group/proj/-/merge_requests/463/diffs", true],
+  ["/group/proj/-/merge_requests/463/pipelines", true],
+  ["/a/b/c/d/-/merge_requests/1", true],
+  // The list, where tracking is wanted.
+  ["/group/proj/-/merge_requests", false],
+  ["/group/proj/-/merge_requests/", false],
+  ["/groups/talondefense/-/merge_requests", false],
+  ["/dashboard/merge_requests", false],
+  // Not a path at all.
+  ["", false],
+  [null, false],
+].forEach(function (t) {
+  check("isMergeRequestPage(" + t[0] + ")", isMergeRequestPage(t[0]), t[1]);
 });
 
 /// @include patterns
